@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🐜 Ant To-Do List – ACO Powered</title>
+    <link rel="stylesheet" href="./css/styles.css">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="navbar-container">
+            <div class="navbar-logo">
+                <span class="logo-emoji">🐜</span>
+                <span class="logo-text">Ant To-Do List</span>
+            </div>
+            <p class="navbar-tagline">Visualize your tasks as a colony of ants finding the optimal path through your daily responsibilities using ACO algorithms.</p>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Left Panel: Input & Controls -->
+        <div class="panel left-panel">
+            <div class="panel-header">
+                <h2>📝 Your Tasks</h2>
+                <p class="panel-subtitle">Enter or paste your to-do list</p>
+            </div>
+
+            <textarea id="taskInput" class="task-input" placeholder="1. Task one&#10;2. Task two&#10;3. Task three&#10;...">1. Reply to emails
+2. Fix bug in authentication
+3. Design new dashboard
+4. Meeting notes update
+5. Update documentation
+6. Code review for team
+7. Lunch break
+8. Deploy staging build
+9. Team standup
+10. Research new tools</textarea>
+
+            <div class="button-group">
+                <button id="addTaskBtn" class="btn btn-secondary" title="Add a new task to the list">
+                    ➕ Add Task
+                </button>
+                <button id="loadExampleBtn" class="btn btn-secondary" title="Load a sample to-do list">
+                    📋 Load Example
+                </button>
+                <button id="resetBtn" class="btn btn-secondary" title="Clear everything and start fresh">
+                    🔄 Reset
+                </button>
+            </div>
+
+            <!-- Advanced Parameters (Collapsed) -->
+            <div class="advanced-section">
+                <button id="toggleAdvanced" class="btn btn-toggle" title="Click to expand/collapse ACO parameters">
+                    ⚙️ Advanced ACO Parameters
+                </button>
+                
+                <div id="advancedPanel" class="advanced-panel collapsed">
+                    <div class="param-group">
+                        <label for="numAnts">
+                            🐜 Number of Ants
+                            <span class="tooltip">ℹ️<span class="tooltip-text">More ants = more exploration but slower. Default: 25</span></span>
+                        </label>
+                        <input type="range" id="numAnts" min="5" max="100" value="25" class="slider">
+                        <span id="numAntsValue" class="param-value">25</span>
+                    </div>
+
+                    <div class="param-group">
+                        <label for="numIterations">
+                            🔄 Iterations
+                            <span class="tooltip">ℹ️<span class="tooltip-text">More iterations = better convergence but slower. Default: 80</span></span>
+                        </label>
+                        <input type="range" id="numIterations" min="10" max="200" value="80" class="slider">
+                        <span id="numIterationsValue" class="param-value">80</span>
+                    </div>
+
+                    <div class="param-group">
+                        <label for="alpha">
+                            α Pheromone Weight
+                            <span class="tooltip">ℹ️<span class="tooltip-text">How much ants rely on previous paths. Default: 1.0</span></span>
+                        </label>
+                        <input type="range" id="alpha" min="0.1" max="3" step="0.1" value="1.0" class="slider">
+                        <span id="alphaValue" class="param-value">1.0</span>
+                    </div>
+
+                    <div class="param-group">
+                        <label for="beta">
+                            β Heuristic Weight
+                            <span class="tooltip">ℹ️<span class="tooltip-text">How much ants favor nearby tasks. Default: 5.0</span></span>
+                        </label>
+                        <input type="range" id="beta" min="0.1" max="10" step="0.1" value="5.0" class="slider">
+                        <span id="betaValue" class="param-value">5.0</span>
+                    </div>
+
+                    <div class="param-group">
+                        <label for="rho">
+                            ρ Evaporation Rate
+                            <span class="tooltip">ℹ️<span class="tooltip-text">How quickly pheromone fades (0.1 slow, 0.3 fast). Default: 0.15</span></span>
+                        </label>
+                        <input type="range" id="rho" min="0.05" max="0.5" step="0.05" value="0.15" class="slider">
+                        <span id="rhoValue" class="param-value">0.15</span>
+                    </div>
+
+                    <div class="param-group">
+                        <label for="q">
+                            Q Pheromone Deposit
+                            <span class="tooltip">ℹ️<span class="tooltip-text">Amount of pheromone each ant deposits. Default: 200</span></span>
+                        </label>
+                        <input type="range" id="q" min="50" max="500" step="10" value="200" class="slider">
+                        <span id="qValue" class="param-value">200</span>
+                    </div>
+                </div>
+            </div>
+
+            <button id="optimizeBtn" class="btn btn-primary" title="Start ACO optimization process">
+                🚀 Optimize Path with ACO Colony
+            </button>
+        </div>
+
+        <!-- Center Panel: Visualization Canvas -->
+        <div class="panel center-panel">
+            <div class="panel-header">
+                <h2>🐜 Colony Visualization</h2>
+                <p class="panel-subtitle">Watch ants discover the optimal path</p>
+            </div>
+            <canvas id="canvas" class="visualization-canvas"></canvas>
+            <div class="canvas-info">
+                <p id="canvasMessage">👉 Enter tasks and click "Optimize Path with ACO Colony" to begin</p>
+            </div>
+        </div>
+
+        <!-- Right Panel: Results -->
+        <div class="panel right-panel">
+            <div class="panel-header">
+                <h2>✅ Results</h2>
+                <p class="panel-subtitle">Before & After optimization</p>
+            </div>
+
+            <!-- Current Order Section -->
+            <div class="results-section">
+                <h3>📋 Current Order</h3>
+                <div id="currentOrderList" class="results-list">
+                    <p class="empty-state">No tasks yet. Enter some above.</p>
+                </div>
+            </div>
+
+            <!-- Divider -->
+            <div class="results-divider">↓ Optimized ↓</div>
+
+            <!-- Optimized Order Section -->
+            <div class="results-section">
+                <h3>🎯 Optimized Order</h3>
+                <div id="optimizedOrderList" class="results-list">
+                    <p class="empty-state">Run ACO optimization to see results.</p>
+                </div>
+            </div>
+
+            <!-- Stats Section -->
+            <div class="results-section stats-section">
+                <h3>📊 Optimization Stats</h3>
+                <div id="statsContainer" class="stats-container">
+                    <p class="empty-state">Awaiting optimization...</p>
+                </div>
+            </div>
+
+            <!-- Explanation Section -->
+            <div class="results-section">
+                <h3>💡 What Happened</h3>
+                <p id="explanation" class="explanation-text">
+                    The ACO algorithm explores possible task orderings by simulating a colony of ants. Each ant builds a tour by probabilistically choosing the next task based on pheromone trails (previous solutions) and heuristic information (distance). Over iterations, ants converge on the best ordering.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="loading-content">
+            <div class="loading-ants">
+                <span class="ant-scout">🐜</span>
+                <span class="ant-scout">🐜</span>
+                <span class="ant-scout">🐜</span>
+            </div>
+            <h3>🔍 Colony Scouting...</h3>
+            <div class="progress-bar">
+                <div id="progressFill" class="progress-fill"></div>
+            </div>
+            <p id="progressText">Iteration 0/0</p>
+        </div>
+    </div>
+
+    <!-- Scripts (loaded in order) -->
+    <script src="./js/utils.js"></script>
+    <script src="./js/aco.js"></script>
+    <script src="./js/visualization.js"></script>
+    <script src="./js/main.js"></script>
+</body>
+</html>
