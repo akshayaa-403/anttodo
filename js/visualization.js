@@ -16,12 +16,14 @@ class VisualizationEngine {
      * @param {HTMLCanvasElement} canvas - Canvas DOM element
      * @param {Object} positions - Task positions {taskId: {x, y}}
      * @param {number} taskCount - Number of tasks
+     * @param {Array} tasks - Task list for node labels
      */
-    constructor(canvas, positions, taskCount) {
+    constructor(canvas, positions, taskCount, tasks = []) {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
         this.positions = positions;
         this.taskCount = taskCount;
+        this.tasks = tasks;
 
         // Set canvas size to fill its container
         this.resize();
@@ -150,20 +152,97 @@ class VisualizationEngine {
      * Draw light edges between all task nodes
      */
     drawEdges() {
+        // Draw regular edges (not part of best path)
         this.ctx.strokeStyle = 'rgba(45, 106, 79, 0.15)';
         this.ctx.lineWidth = 1;
 
         for (let i = 0; i < this.taskCount; i++) {
             for (let j = i + 1; j < this.taskCount; j++) {
-                const p1 = this.positions[i];
-                const p2 = this.positions[j];
+                if (!this.isBestPathEdge(i, j)) {
+                    const p1 = this.positions[i];
+                    const p2 = this.positions[j];
 
-                this.ctx.beginPath();
-                this.ctx.moveTo(p1.x, p1.y);
-                this.ctx.lineTo(p2.x, p2.y);
-                this.ctx.stroke();
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(p1.x, p1.y);
+                    this.ctx.lineTo(p2.x, p2.y);
+                    this.ctx.stroke();
+                }
             }
         }
+
+        // Draw best path edges (highlighted)
+        this.drawBestPathEdges();
+    }
+
+    /**
+     * Check if edge is part of best path
+     */
+    isBestPathEdge(i, j) {
+        if (!this.bestTour || this.bestTour.length < 2) return false;
+        
+        for (let k = 0; k < this.bestTour.length - 1; k++) {
+            const from = this.bestTour[k];
+            const to = this.bestTour[k + 1];
+            if ((from === i && to === j) || (from === j && to === i)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Draw best path edges with highlighting and arrows
+     */
+    drawBestPathEdges() {
+        if (!this.bestTour || this.bestTour.length < 2) return;
+
+        // Draw glowing best path
+        this.ctx.strokeStyle = 'rgba(217, 119, 6, 0.8)';
+        this.ctx.lineWidth = 4;
+        this.ctx.shadowColor = 'rgba(217, 119, 6, 0.6)';
+        this.ctx.shadowBlur = 12;
+        this.ctx.lineCap = 'round';
+        this.ctx.lineJoin = 'round';
+
+        for (let k = 0; k < this.bestTour.length - 1; k++) {
+            const fromIdx = this.bestTour[k];
+            const toIdx = this.bestTour[k + 1];
+            const p1 = this.positions[fromIdx];
+            const p2 = this.positions[toIdx];
+
+            this.ctx.beginPath();
+            this.ctx.moveTo(p1.x, p1.y);
+            this.ctx.lineTo(p2.x, p2.y);
+            this.ctx.stroke();
+
+            // Draw arrow
+            this.drawArrow(p1, p2);
+        }
+
+        this.ctx.shadowColor = 'transparent';
+        this.ctx.shadowBlur = 0;
+    }
+
+    /**
+     * Draw arrow on an edge
+     */
+    drawArrow(from, to) {
+        const headlen = 15;
+        const angle = Math.atan2(to.y - from.y, to.x - from.x);
+
+        // Position arrow at 60% along the line
+        const t = 0.6;
+        const arrowX = from.x + (to.x - from.x) * t;
+        const arrowY = from.y + (to.y - from.y) * t;
+
+        // Arrow head colors
+        this.ctx.fillStyle = '#f59e0b';
+        this.ctx.beginPath();
+        this.ctx.moveTo(arrowX, arrowY);
+        this.ctx.lineTo(arrowX - headlen * Math.cos(angle - Math.PI / 6), arrowY - headlen * Math.sin(angle - Math.PI / 6));
+        this.ctx.lineTo(arrowX - headlen * Math.cos(angle + Math.PI / 6), arrowY - headlen * Math.sin(angle + Math.PI / 6));
+        this.ctx.closePath();
+        this.ctx.fill();
     }
 
     /**
@@ -215,7 +294,7 @@ class VisualizationEngine {
      * Draw task nodes (circles with labels)
      */
     drawNodes() {
-        const nodeRadius = 18;
+        const nodeRadius = 20;
 
         for (let i = 0; i < this.taskCount; i++) {
             const pos = this.positions[i];
@@ -231,12 +310,15 @@ class VisualizationEngine {
             this.ctx.lineWidth = 2;
             this.ctx.stroke();
 
-            // Draw task number
+            // Draw task name or number
+            const task = this.tasks[i];
+            const label = task ? (task.displayText || task.text).substring(0, 8) : (i + 1).toString();
+            
             this.ctx.fillStyle = this.colors.nodeText;
-            this.ctx.font = 'bold 10px sans-serif';
+            this.ctx.font = 'bold 9px sans-serif';
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
-            this.ctx.fillText((i + 1).toString(), pos.x, pos.y);
+            this.ctx.fillText(label, pos.x, pos.y);
         }
     }
 

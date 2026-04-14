@@ -13,7 +13,7 @@
 /**
  * Parse tasks from textarea input
  * Handles numbered lists, bullet points, or plain lines
- * Returns array of {id, text, position: {x, y}}
+ * Returns array of {id, text, emoji, priority, duration, completed}
  */
 function parseTasks(input) {
     const lines = input.trim().split('\n');
@@ -26,10 +26,72 @@ function parseTasks(input) {
             return text.length > 0 ? { id: idx, text } : null;
         })
         .filter(t => t !== null)
-        .map((task, idx) => ({
-            ...task,
-            id: idx // Re-index after filtering
-        }));
+        .map((task, idx) => {
+            const enhancedTask = enhanceTaskData(task.text);
+            return {
+                ...task,
+                ...enhancedTask,
+                id: idx // Re-index after filtering
+            };
+        });
+}
+
+/**
+ * Extract metadata from task text
+ * Detects: priority, emoji, duration, completed status
+ */
+function enhanceTaskData(text) {
+    // Default values
+    let priority = 'Medium';
+    let emoji = '📝';
+    let duration = null;
+    let completed = false;
+    let cleanText = text;
+
+    // Check for completion markers
+    if (text.includes('✓') || text.includes('✅') || text.startsWith('[x]') || text.startsWith('☑')) {
+        completed = true;
+        cleanText = cleanText.replace(/^[✓✅☑\[x\]]\s*/, '').trim();
+    }
+
+    // Extract duration patterns: "30min", "1h", "(30)", etc.
+    const durationMatch = cleanText.match(/(\d+)\s*(min|hour|h|m)/i);
+    if (durationMatch) {
+        const value = parseInt(durationMatch[1]);
+        const unit = durationMatch[2].toLowerCase();
+        duration = unit.startsWith('h') ? value * 60 : value;
+        cleanText = cleanText.replace(durationMatch[0], '').trim();
+    }
+
+    // Extract emoji from start
+    const emojiMatch = cleanText.match(/^[\p{Emoji}]\s*/u);
+    if (emojiMatch) {
+        emoji = emojiMatch[0].trim();
+        cleanText = cleanText.replace(emojiMatch[0], '').trim();
+    }
+
+    // Detect priority from keywords
+    if (cleanText.match(/urgent|critical|asap|!!!/i) || cleanText.startsWith('!')) {
+        priority = 'High';
+        emoji = emoji === '📝' ? '🔴' : emoji;
+        cleanText = cleanText.replace(/^!+\s*/, '').trim();
+    } else if (cleanText.match(/\(high\)|\[high\]|high.*priority/i)) {
+        priority = 'High';
+        emoji = emoji === '📝' ? '🔴' : emoji;
+    } else if (cleanText.match(/\(medium\)|\[medium\]|medium.*priority/i)) {
+        priority = 'Medium';
+    } else if (cleanText.match(/\(low\)|\[low\]|low.*priority/i)) {
+        priority = 'Low';
+        emoji = emoji === '📝' ? '🟢' : emoji;
+    }
+
+    return {
+        emoji,
+        priority,
+        duration,
+        completed,
+        displayText: cleanText
+    };
 }
 
 /**

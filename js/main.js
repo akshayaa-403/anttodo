@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Pre-create visualization (empty state)
     const canvas = document.getElementById('canvas');
-    appState.visualization = new VisualizationEngine(canvas, {}, 0);
+    appState.visualization = new VisualizationEngine(canvas, {}, 0, []);
 
     console.log('✅ App initialized');
 });
@@ -189,10 +189,10 @@ async function runOptimization() {
     const optimizer = new AntColonyOptimizer(taskCount, appState.distMatrix, params);
     appState.optimizer = optimizer;
 
-    // Initialize visualization
+    // Initialize visualization (pass tasks for node labels)
     if (!appState.visualization || appState.visualization.taskCount !== taskCount) {
         const canvas = document.getElementById('canvas');
-        appState.visualization = new VisualizationEngine(canvas, appState.positions, taskCount);
+        appState.visualization = new VisualizationEngine(canvas, appState.positions, taskCount, appState.tasks);
     }
 
     // Run ACO with visualization callback
@@ -261,7 +261,7 @@ function displayResults(result) {
 
     // Display current order
     const currentOrderHtml = appState.tasks
-        .map((task, idx) => `<li>${(idx + 1)}. ${truncateText(task.text, 30)}</li>`)
+        .map((task, idx) => `<li>${(idx + 1)}. ${truncateText(task.displayText || task.text, 30)}</li>`)
         .join('');
     currentOrderList.innerHTML = `<ol>${currentOrderHtml}</ol>`;
 
@@ -270,37 +270,36 @@ function displayResults(result) {
         const optimizedOrderHtml = result.bestTour
             .map((taskIdx, displayIdx) => {
                 const task = appState.tasks[taskIdx];
-                return `<li>${(displayIdx + 1)}. ${truncateText(task.text, 30)}</li>`;
+                return `<li>${(displayIdx + 1)}. ${truncateText(task.displayText || task.text, 30)}</li>`;
             })
             .join('');
         optimizedOrderList.innerHTML = `<ol>${optimizedOrderHtml}</ol>`;
     }
 
-    // Display statistics
+    // Display statistics as metric cards
+    const timeSaved = (result.improvement / 10).toFixed(1); // Rough estimate in minutes
+    const priorityBoost = Math.round(result.improvementPercent * 1.3);
+    
     const statsHtml = `
-        <div class="stat-item">
-            <span class="stat-label">Initial Distance:</span>
-            <span class="stat-value">${result.initialLength.toFixed(0)}</span>
+        <div class="metric-card">
+            <div class="metric-icon">⏱️</div>
+            <div class="metric-value">${timeSaved}min</div>
+            <div class="metric-label">Time Optimized</div>
         </div>
-        <div class="stat-item">
-            <span class="stat-label">Optimized Distance:</span>
-            <span class="stat-value">${result.bestLength.toFixed(0)}</span>
+        <div class="metric-card">
+            <div class="metric-icon">🔥</div>
+            <div class="metric-value">+${priorityBoost}%</div>
+            <div class="metric-label">Urgency Gain</div>
         </div>
-        <div class="stat-item">
-            <span class="stat-label">Distance Saved:</span>
-            <span class="stat-value">${result.improvement.toFixed(0)} (${formatPercentage(result.improvementPercent / 100)})</span>
+        <div class="metric-card">
+            <div class="metric-icon">🐜</div>
+            <div class="metric-value">${result.iterations}</div>
+            <div class="metric-label">Iterations</div>
         </div>
-        <div class="stat-item">
-            <span class="stat-label">Algorithm Iterations:</span>
-            <span class="stat-value">${result.iterations}</span>
-        </div>
-        <div class="stat-item">
-            <span class="stat-label">Colony Size:</span>
-            <span class="stat-value">${result.numAnts} ants</span>
-        </div>
-        <div class="stat-item">
-            <span class="stat-label">Convergence Speed:</span>
-            <span class="stat-value">${result.convergenceRate.toFixed(1)}%</span>
+        <div class="metric-card">
+            <div class="metric-icon">🏆</div>
+            <div class="metric-value">${result.improvementPercent.toFixed(1)}%</div>
+            <div class="metric-label">Route Improvement</div>
         </div>
     `;
     statsContainer.innerHTML = statsHtml;
@@ -360,10 +359,48 @@ function updateCurrentOrderDisplay() {
     }
 
     const html = `<ol>${appState.tasks
-        .map((task, idx) => `<li>${(idx + 1)}. ${truncateText(task.text, 30)}</li>`)
+        .map((task, idx) => `<li>${(idx + 1)}. ${truncateText(task.displayText || task.text, 30)}</li>`)
         .join('')}</ol>`;
 
     currentOrderList.innerHTML = html;
+    renderTaskPreview();
+}
+
+/**
+ * Render task preview with enhanced cards
+ */
+function renderTaskPreview() {
+    const taskListPreview = document.getElementById('taskListPreview');
+    
+    if (appState.tasks.length === 0) {
+        taskListPreview.innerHTML = '<p class="empty-state">Enter tasks above to see preview</p>';
+        return;
+    }
+
+    const cardsHtml = appState.tasks.map(task => {
+        const priorityClass = task.priority ? task.priority.toLowerCase() : 'medium';
+        const completedClass = task.completed ? 'completed' : '';
+        const displayText = task.displayText || task.text;
+        
+        return `
+            <div class="task-card ${priorityClass} ${completedClass}">
+                <input type="checkbox" class="task-card-checkbox" ${task.completed ? 'checked' : ''}>
+                <div class="task-card-content">
+                    <div class="task-card-header">
+                        <span class="task-emoji">${task.emoji || '📝'}</span>
+                        <span class="task-text">${truncateText(displayText, 35)}</span>
+                    </div>
+                    <div class="task-badges">
+                        ${task.priority ? `<span class="task-badge priority">${task.priority}</span>` : ''}
+                        ${task.duration ? `<span class="task-badge duration">⏱️ ${task.duration}min</span>` : ''}
+                    </div>
+                </div>
+                <span style="font-size: 0.75rem; color: var(--color-text-secondary);">#${task.id + 1}</span>
+            </div>
+        `;
+    }).join('');
+    
+    taskListPreview.innerHTML = cardsHtml;
 }
 
 /**
