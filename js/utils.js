@@ -16,22 +16,47 @@
  * Returns array of {id, text, emoji, priority, duration, completed}
  */
 function parseTasks(input) {
+    if (!input || typeof input !== 'string') return [];
+
     const lines = input.trim().split('\n');
+    const seenTexts = new Set(); // Track duplicates
+
     return lines
-        .map((line, idx) => {
-            // Remove numbering: "1. Task" -> "Task", "- Task" -> "Task"
-            let text = line.replace(/^[\d\-\*].[\s]?/, '').trim();
-            // Remove leading/trailing whitespace
+        .map((line) => {
+            // Skip empty or whitespace-only lines
+            if (!line || !line.trim()) return null;
+
+            // Remove various numbering formats:
+            // "1. Task", "1) Task", "1] Task", "1: Task"
+            // "- Task", "* Task", "• Task"
+            let text = line.replace(/^[\s]*[\d]*[\.\)\]:]{0,1}[\s]*[\-\*•]?[\s]+/, '').trim();
+
+            // Fallback: if line doesn't have numbering, just trim
+            if (text === line.trim()) {
+                text = line.trim();
+            }
+
+            // Final cleanup
             text = text.replace(/^\s+|\s+$/g, '').trim();
-            return text.length > 0 ? { id: idx, text } : null;
+
+            return text.length > 0 ? { originalText: text } : null;
         })
         .filter(t => t !== null)
+        .filter((task) => {
+            // Remove duplicates (case-insensitive, normalized)
+            const normalized = task.originalText.toLowerCase().trim();
+            if (seenTexts.has(normalized)) {
+                return false;
+            }
+            seenTexts.add(normalized);
+            return true;
+        })
         .map((task, idx) => {
-            const enhancedTask = enhanceTaskData(task.text);
+            const enhancedTask = enhanceTaskData(task.originalText);
             return {
-                ...task,
-                ...enhancedTask,
-                id: idx // Re-index after filtering
+                id: idx,
+                text: task.originalText,
+                ...enhancedTask
             };
         });
 }
@@ -48,39 +73,45 @@ function enhanceTaskData(text) {
     let completed = false;
     let cleanText = text;
 
-    // Check for completion markers
-    if (text.includes('✓') || text.includes('✅') || text.startsWith('[x]') || text.startsWith('☑')) {
+    // Check for completion markers at start: ✅, [x], [X], ☑, ✓, ~text~
+    if (/^[\s]*[\[✓✅☑]|^\s*\[x\]|^\s*\[X\]|^~/.test(cleanText)) {
         completed = true;
-        cleanText = cleanText.replace(/^[✓✅☑\[x\]]\s*/, '').trim();
+        // Remove completion markers from any position
+        cleanText = cleanText
+            .replace(/^\s*[\[✓✅☑]/, '')
+            .replace(/^\s*\[x\]/i, '')
+            .replace(/^[\s~]+/, '')
+            .replace(/~\s*$/, '')
+            .trim();
     }
 
-    // Extract duration patterns: "30min", "1h", "(30)", etc.
-    const durationMatch = cleanText.match(/(\d+)\s*(min|hour|h|m)/i);
+    // Extract duration patterns: "30min", "1h", "(30)", "[30min]", etc.
+    const durationMatch = cleanText.match(/\((\d+)(?:\s*(?:min|m|h|hour))?\)|(\d+)\s*(min|minute|minutes|h|hour|hours|m)(?:\s|$)/i);
     if (durationMatch) {
-        const value = parseInt(durationMatch[1]);
-        const unit = durationMatch[2].toLowerCase();
-        duration = unit.startsWith('h') ? value * 60 : value;
+        const value = parseInt(durationMatch[1] || durationMatch[2]);
+        const unit = (durationMatch[3] || 'min').toLowerCase();
+        duration = (unit.startsWith('h') || unit === 'hour') ? value * 60 : value;
         cleanText = cleanText.replace(durationMatch[0], '').trim();
     }
 
-    // Extract emoji from start
-    const emojiMatch = cleanText.match(/^[\p{Emoji}]\s*/u);
+    // Extract emoji from start (single emoji character)
+    const emojiMatch = cleanText.match(/^([\p{Emoji_Presentation}\p{Extended_Pictographic}])\s*/u);
     if (emojiMatch) {
-        emoji = emojiMatch[0].trim();
+        emoji = emojiMatch[1];
         cleanText = cleanText.replace(emojiMatch[0], '').trim();
     }
 
-    // Detect priority from keywords
-    if (cleanText.match(/urgent|critical|asap|!!!/i) || cleanText.startsWith('!')) {
+    // Detect priority from keywords (handle variations)
+    if (/^!+\s|urgent|critical|asap|!!!|highest|top priority/i.test(cleanText)) {
         priority = 'High';
         emoji = emoji === '📝' ? '🔴' : emoji;
         cleanText = cleanText.replace(/^!+\s*/, '').trim();
-    } else if (cleanText.match(/\(high\)|\[high\]|high.*priority/i)) {
+    } else if (/\(high\)|\[high\]|high.*priority|\bhigh\b/i.test(cleanText)) {
         priority = 'High';
         emoji = emoji === '📝' ? '🔴' : emoji;
-    } else if (cleanText.match(/\(medium\)|\[medium\]|medium.*priority/i)) {
+    } else if (/\(medium\)|\[medium\]|medium.*priority|\bmedium\b/i.test(cleanText)) {
         priority = 'Medium';
-    } else if (cleanText.match(/\(low\)|\[low\]|low.*priority/i)) {
+    } else if (/\(low\)|\[low\]|low.*priority|\blow\b/i.test(cleanText)) {
         priority = 'Low';
         emoji = emoji === '📝' ? '🟢' : emoji;
     }

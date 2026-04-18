@@ -1021,3 +1021,51 @@ body {
         page-break-inside: avoid;
     }
 }
+
+/* ============================================================================
+   VALIDATION MESSAGE
+   ============================================================================ */
+
+.validation-message {
+    background-color: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    border-left: 4px solid #ef4444;
+    padding: var(--spacing-md);
+    border-radius: 4px;
+    margin-bottom: var(--spacing-md);
+    color: #fca5a5;
+    font-size: var(--font-size-sm);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    animation: slideIn var(--duration-fast) var(--timing-ease);
+}
+
+.validation-message.warning {
+    background-color: rgba(245, 158, 11, 0.1);
+    border-color: rgba(245, 158, 11, 0.5);
+    border-left-color: #f59e0b;
+    color: #fed7aa;
+}
+
+.validation-message.success {
+    background-color: rgba(34, 197, 94, 0.1);
+    border-color: rgba(34, 197, 94, 0.5);
+    border-left-color: #22c55e;
+    color: #bbf7d0;
+}
+
+.validation-message.hidden {
+    display: none;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

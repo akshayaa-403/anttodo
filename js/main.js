@@ -39,6 +39,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const canvas = document.getElementById('canvas');
     appState.visualization = new VisualizationEngine(canvas, {}, 0, []);
 
+    // Initialize progress text to empty (will update during optimization)
+    const progressText = document.getElementById('progressText');
+    if (progressText) {
+        progressText.textContent = '';
+    }
+
     console.log('✅ App initialized');
 });
 
@@ -76,6 +82,8 @@ function initializeEventListeners() {
     const taskInput = document.getElementById('taskInput');
     if (taskInput) {
         taskInput.addEventListener('change', loadTasks);
+        // Add live preview on input
+        taskInput.addEventListener('input', loadTasks);
     }
 }
 
@@ -100,6 +108,33 @@ function initializeParameterSliders() {
 }
 
 /**
+ * Show validation error/warning message
+ */
+function showValidationMessage(message, type = 'error') {
+    const messageEl = document.getElementById('validationMessage');
+    if (!messageEl) return;
+
+    messageEl.textContent = message;
+    messageEl.className = `validation-message ${type}`;
+    messageEl.setAttribute('role', 'alert');
+
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+        messageEl.classList.add('hidden');
+    }, 5000);
+}
+
+/**
+ * Clear validation message
+ */
+function clearValidationMessage() {
+    const messageEl = document.getElementById('validationMessage');
+    if (messageEl) {
+        messageEl.classList.add('hidden');
+    }
+}
+
+/**
  * Handle optimize button click
  */
 async function handleOptimize() {
@@ -114,9 +149,11 @@ async function handleOptimize() {
     // Validate
     const validation = validateTaskCount(appState.tasks);
     if (!validation.valid) {
-        alert(validation.warning);
+        showValidationMessage(validation.warning);
         return;
     }
+
+    clearValidationMessage();
 
     appState.isOptimizing = true;
 
@@ -539,3 +576,36 @@ function setupCanvasHover() {
 
 // Initialize canvas hover on load
 document.addEventListener('DOMContentLoaded', setupCanvasHover);
+
+/**
+ * Handle window resize - regenerate task positions for responsive canvas
+ */
+function handleWindowResize() {
+    const canvas = document.getElementById('canvas');
+    if (!canvas || appState.taskCount === 0) return;
+
+    const newWidth = canvas.offsetWidth;
+    const newHeight = canvas.offsetHeight;
+
+    if (newWidth > 0 && newHeight > 0) {
+        // Regenerate positions with new canvas dimensions
+        appState.positions = generateTaskPositions(appState.taskCount, newWidth, newHeight);
+
+        if (appState.optimizer && appState.distMatrix) {
+            // Rebuild distance matrix if optimization already ran
+            appState.distMatrix = buildDistanceMatrix(appState.positions, appState.taskCount);
+        }
+
+        // Reset visualization with new positions
+        if (appState.visualization) {
+            appState.visualization = new VisualizationEngine(canvas, appState.positions, appState.taskCount, appState.tasks);
+        }
+    }
+}
+
+// Debounced resize handler
+let resizeTimeout;
+window.addEventListener('resize', () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(handleWindowResize, 300);
+});
