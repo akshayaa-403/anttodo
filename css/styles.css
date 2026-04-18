@@ -620,6 +620,88 @@ body {
     text-align: center;
 }
 
+/* Step-Through Controls */
+.step-through-controls {
+    background: rgba(45, 106, 79, 0.1);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: var(--spacing-md);
+    margin-top: var(--spacing-md);
+}
+
+.step-controls-header {
+    margin-bottom: var(--spacing-md);
+}
+
+.step-controls-header h4 {
+    margin: 0 0 var(--spacing-sm) 0;
+    font-size: var(--font-size-base);
+    color: var(--color-text-primary);
+}
+
+.step-info-text {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+
+.step-controls-body {
+    display: flex;
+    gap: var(--spacing-md);
+    align-items: center;
+}
+
+.iteration-slider {
+    flex: 1;
+    min-width: 0;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: linear-gradient(to right, #2d6a4f, #d97706);
+    border-radius: 3px;
+    outline: none;
+}
+
+.iteration-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #d97706;
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(217, 119, 6, 0.5);
+    transition: box-shadow var(--duration-fast);
+}
+
+.iteration-slider::-webkit-slider-thumb:hover {
+    box-shadow: 0 0 12px rgba(217, 119, 6, 0.8);
+}
+
+.iteration-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #d97706;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 0 8px rgba(217, 119, 6, 0.5);
+    transition: box-shadow var(--duration-fast);
+}
+
+.iteration-slider::-moz-range-thumb:hover {
+    box-shadow: 0 0 12px rgba(217, 119, 6, 0.8);
+}
+
+.iteration-label {
+    font-size: var(--font-size-base);
+    color: var(--color-accent-orange);
+    font-weight: bold;
+    white-space: nowrap;
+    min-width: 100px;
+    text-align: right;
+}
+
 .task-card.completed .task-text {
     text-decoration: line-through;
     color: var(--color-text-secondary);

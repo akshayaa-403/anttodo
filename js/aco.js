@@ -131,7 +131,16 @@ class AntColonyOptimizer {
             this.iterationHistory.push({
                 iteration: iter,
                 bestLength: this.bestLength,
-                avgLength: this.getAverageLength()
+                avgLength: this.getAverageLength(),
+                // Store pheromones for visualization in step-through mode
+                pheromones: deepCopy2D(this.pheromones),
+                // Store sampled ants data for visualization
+                ants: this.ants.map(ant => ({
+                    id: ant.id,
+                    tour: [...ant.tour],
+                    path: [...ant.path],
+                    length: ant.length
+                }))
             });
         }
 

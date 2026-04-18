@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize UI elements
     initializeEventListeners();
     initializeParameterSliders();
+    initializeStepThroughControls();
 
     // Load default example
     loadTasks();
@@ -397,6 +398,23 @@ function displayResults(result) {
     // Draw convergence graph
     if (result.history && result.history.length > 0) {
         drawConvergenceGraph(result.history);
+
+        // Initialize step-through mode
+        stepThroughState.history = result.history;
+        stepThroughState.maxIteration = result.history.length;
+        stepThroughState.currentIteration = 0;
+
+        // Show step-through controls
+        const stepControls = document.getElementById('stepThroughControls');
+        if (stepControls) {
+            stepControls.style.display = 'block';
+            const slider = document.getElementById('iterationSlider');
+            if (slider) {
+                slider.max = result.history.length - 1;
+                slider.value = 0;
+            }
+            updateIterationLabel();
+        }
     }
 
     // Update canvas message
@@ -953,3 +971,153 @@ window.addEventListener('resize', () => {
     clearTimeout(resizeTimeout);
     resizeTimeout = setTimeout(handleWindowResize, 300);
 });
+
+/**
+ * Global state for step-through mode
+ */
+const stepThroughState = {
+    isPlaying: false,
+    currentIteration: 0,
+    maxIteration: 0,
+    history: [],
+    playbackSpeed: 50  // milliseconds per iteration
+};
+
+/**
+ * Initialize step-through controls
+ */
+function initializeStepThroughControls() {
+    const playPauseBtn = document.getElementById('playPauseBtn');
+    const iterationSlider = document.getElementById('iterationSlider');
+
+    if (playPauseBtn) {
+        playPauseBtn.addEventListener('click', handlePlayPause);
+    }
+
+    if (iterationSlider) {
+        iterationSlider.addEventListener('input', handleIterationSlider);
+    }
+}
+
+/**
+ * Handle play/pause button
+ */
+function handlePlayPause() {
+    const playPauseBtn = document.getElementById('playPauseBtn');
+    if (!playPauseBtn) return;
+
+    stepThroughState.isPlaying = !stepThroughState.isPlaying;
+
+    if (stepThroughState.isPlaying) {
+        playPauseBtn.innerHTML = '⏸️ Pause';
+        playThroughIterations();
+    } else {
+        playPauseBtn.innerHTML = '▶️ Play';
+    }
+}
+
+/**
+ * Handle iteration slider
+ */
+function handleIterationSlider(e) {
+    stepThroughState.currentIteration = parseInt(e.target.value);
+    stepThroughState.isPlaying = false;
+
+    // Update button state
+    const playPauseBtn = document.getElementById('playPauseBtn');
+    if (playPauseBtn) {
+        playPauseBtn.innerHTML = '▶️ Play';
+    }
+
+    // Update visualization
+    visualizeIteration(stepThroughState.currentIteration);
+}
+
+/**
+ * Update label
+ */
+function updateIterationLabel() {
+    const label = document.getElementById('iterationLabel');
+    if (label) {
+        label.textContent = `Iteration ${stepThroughState.currentIteration + 1}/${stepThroughState.maxIteration}`;
+    }
+}
+
+/**
+ * Visualize a specific iteration
+ */
+function visualizeIteration(iterIdx) {
+    if (!stepThroughState.history || iterIdx >= stepThroughState.history.length) {
+        return;
+    }
+
+    const iterData = stepThroughState.history[iterIdx];
+    updateIterationLabel();
+
+    // Update visualization with this iteration's state
+    if (appState.visualization && iterData) {
+        appState.visualization.updateState({
+            ants: iterData.ants || [],
+            pheromones: iterData.pheromones,
+            bestTour: appState.optimizationResult.bestTour,
+            bestLength: iterData.bestLength
+        });
+    }
+}
+
+/**
+ * Play through iterations automatically
+ */
+function playThroughIterations() {
+    if (!stepThroughState.isPlaying || stepThroughState.currentIteration >= stepThroughState.maxIteration - 1) {
+        stepThroughState.isPlaying = false;
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        if (playPauseBtn) {
+            playPauseBtn.innerHTML = '▶️ Play';
+        }
+        return;
+    }
+
+    stepThroughState.currentIteration++;
+    const slider = document.getElementById('iterationSlider');
+    if (slider) {
+        slider.value = stepThroughState.currentIteration;
+    }
+
+    visualizeIteration(stepThroughState.currentIteration);
+
+    // Schedule next iteration
+    setTimeout(() => {
+        if (stepThroughState.isPlaying) {
+            playThroughIterations();
+        }
+    }, stepThroughState.playbackSpeed);
+}
+
+/**
+ * Handle keyboard shortcuts
+ */
+function handleKeyboardShortcuts(e) {
+    // Ctrl+Enter or Cmd+Enter to optimize
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        const optimizeBtn = document.getElementById('optimizeBtn');
+        if (optimizeBtn && !optimizeBtn.disabled) {
+            optimizeBtn.click();
+        }
+    }
+
+    // Ctrl+S or Cmd+S to save list
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        const saveListBtn = document.getElementById('saveListBtn');
+        if (saveListBtn) {
+            saveListBtn.click();
+        }
+    }
+
+    // Escape to clear validation message
+    if (e.key === 'Escape') {
+        clearValidationMessage();
+    }
+}

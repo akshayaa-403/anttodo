@@ -212,6 +212,19 @@
                 <h3>📈 Convergence Graph</h3>
                 <canvas id="convergenceCanvas" class="convergence-graph" aria-label="Graph showing convergence of best path length over iterations"></canvas>
                 <p id="convergenceInfo" class="convergence-info"></p>
+
+                <!-- Step-by-Step Controls -->
+                <div id="stepThroughControls" class="step-through-controls" style="display:none;">
+                    <div class="step-controls-header">
+                        <h4>🎬 Step Through Iterations</h4>
+                        <p class="step-info-text">Scrub through the algorithm's iterations to see how it converges</p>
+                    </div>
+                    <div class="step-controls-body">
+                        <button id="playPauseBtn" class="btn btn-secondary btn-sm" aria-label="Play or pause iteration stepping">▶️ Play</button>
+                        <input type="range" id="iterationSlider" class="iteration-slider" min="0" max="100" value="0" aria-label="Iteration slider">
+                        <span id="iterationLabel" class="iteration-label" aria-live="polite">Iteration 0/0</span>
+                    </div>
+                </div>
             </div>
 
             <!-- Explanation Section -->
