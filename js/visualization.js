@@ -36,6 +36,7 @@ class VisualizationEngine {
         this.isOptimizing = false;
         this.showFinalPath = false;
         this.animationProgress = 0;
+        this.marchingAntsTime = 0;  // For continuous marching ants animation
 
         // Color scheme
         this.colors = {
@@ -102,6 +103,9 @@ class VisualizationEngine {
         this.ctx.fillStyle = this.colors.background;
         this.ctx.fillRect(0, 0, this.width, this.height);
 
+        // Update animation timer for marching ants
+        this.marchingAntsTime += 1;
+
         // Draw grid background
         this.drawGrid();
 
@@ -111,6 +115,10 @@ class VisualizationEngine {
         // Draw pheromone trails (if available)
         if (this.pheromones) {
             this.drawPheromoneTrails();
+            // Draw marching ants along trails during optimization
+            if (this.ants && this.ants.length > 0) {
+                this.drawMarchingAnts();
+            }
         }
 
         // Draw task nodes
@@ -286,6 +294,77 @@ class VisualizationEngine {
                 this.ctx.lineTo(p2.x, p2.y);
                 this.ctx.stroke();
                 this.ctx.globalAlpha = 1;
+            }
+        }
+    }
+
+    /**
+     * Draw marching ants animation along pheromone trails
+     * Animated dashes move continuously along high-pheromone paths
+     */
+    drawMarchingAnts() {
+        if (!this.pheromones) return;
+
+        // Find min and max pheromone for normalization
+        let minPher = Infinity, maxPher = -Infinity;
+        for (let i = 0; i < this.taskCount; i++) {
+            for (let j = 0; j < this.taskCount; j++) {
+                minPher = Math.min(minPher, this.pheromones[i][j]);
+                maxPher = Math.max(maxPher, this.pheromones[i][j]);
+            }
+        }
+
+        const dashLength = 8;
+        const spacing = 16;
+        const animationSpeed = 4;
+
+        // Draw marching ants on high-pheromone trails
+        for (let i = 0; i < this.taskCount; i++) {
+            for (let j = i + 1; j < this.taskCount; j++) {
+                const pheromone = this.pheromones[i][j];
+                const normalized = (pheromone - minPher) / (maxPher - minPher + 0.0001);
+
+                // Only draw marching ants on trails with significant pheromone
+                if (normalized < 0.3) continue;
+
+                const p1 = this.positions[i];
+                const p2 = this.positions[j];
+
+                const dx = p2.x - p1.x;
+                const dy = p2.y - p1.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const unitX = dx / distance;
+                const unitY = dy / distance;
+
+                // Calculate animation offset
+                const offset = (this.marchingAntsTime * animationSpeed) % (spacing + dashLength);
+
+                // Draw marching ants along the trail
+                let currentDist = offset - spacing;
+                while (currentDist < distance) {
+                    if (currentDist + dashLength > 0) {
+                        const startDist = Math.max(0, currentDist);
+                        const endDist = Math.min(distance, currentDist + dashLength);
+
+                        const x1 = p1.x + unitX * startDist;
+                        const y1 = p1.y + unitY * startDist;
+                        const x2 = p1.x + unitX * endDist;
+                        const y2 = p1.y + unitY * endDist;
+
+                        // Color intensity based on pheromone level
+                        const intensity = 0.3 + normalized * 0.7;
+                        this.ctx.strokeStyle = `rgba(217, 119, 6, ${intensity})`;
+                        this.ctx.lineWidth = 2 + normalized * 3;
+                        this.ctx.lineCap = 'round';
+
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(x1, y1);
+                        this.ctx.lineTo(x2, y2);
+                        this.ctx.stroke();
+                    }
+
+                    currentDist += spacing + dashLength;
+                }
             }
         }
     }
@@ -476,6 +555,7 @@ class VisualizationEngine {
         this.isOptimizing = false;
         this.showFinalPath = false;
         this.animationProgress = 0;
+        this.marchingAntsTime = 0;
         this.draw();
     }
 
