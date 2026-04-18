@@ -319,10 +319,113 @@ function sleep(ms) {
 }
 
 /**
- * Map value from one range to another
+ * Save task list to localStorage
+ * @param {string} name - Name to save the list under
+ * @param {Array} tasks - Array of task objects
  */
-function mapRange(value, inMin, inMax, outMin, outMax) {
-    return ((value - inMin) / (inMax - inMin)) * (outMax - outMin) + outMin;
+function saveTaskList(name, tasks) {
+    if (!name || name.trim() === '') return false;
+
+    try {
+        const normalizedName = name.trim();
+        const savedLists = JSON.parse(localStorage.getItem('savedTaskLists') || '{}');
+        savedLists[normalizedName] = {
+            name: normalizedName,
+            tasks: tasks.map(t => t.text), // Save as simple text array for simplicity
+            savedAt: new Date().toISOString()
+        };
+        localStorage.setItem('savedTaskLists', JSON.stringify(savedLists));
+        return true;
+    } catch (e) {
+        console.error('Failed to save task list:', e);
+        return false;
+    }
+}
+
+/**
+ * Load task list from localStorage
+ * @param {string} name - Name of the saved list
+ * @returns {Array|null} Array of task texts or null if not found
+ */
+function loadTaskList(name) {
+    try {
+        const savedLists = JSON.parse(localStorage.getItem('savedTaskLists') || '{}');
+        const list = savedLists[name];
+        return list ? list.tasks : null;
+    } catch (e) {
+        console.error('Failed to load task list:', e);
+        return null;
+    }
+}
+
+/**
+ * Get all saved task lists
+ * @returns {Object} Dictionary of {listName: {name, savedAt, taskCount}}
+ */
+function getSavedTaskLists() {
+    try {
+        const savedLists = JSON.parse(localStorage.getItem('savedTaskLists') || '{}');
+        const result = {};
+        for (const [key, value] of Object.entries(savedLists)) {
+            result[key] = {
+                name: value.name,
+                taskCount: value.tasks ? value.tasks.length : 0,
+                savedAt: value.savedAt
+            };
+        }
+        return result;
+    } catch (e) {
+        console.error('Failed to get saved task lists:', e);
+        return {};
+    }
+}
+
+/**
+ * Delete a saved task list
+ * @param {string} name - Name of the list to delete
+ * @returns {boolean} True if deleted successfully
+ */
+function deleteTaskList(name) {
+    try {
+        const savedLists = JSON.parse(localStorage.getItem('savedTaskLists') || '{}');
+        if (savedLists[name]) {
+            delete savedLists[name];
+            localStorage.setItem('savedTaskLists', JSON.stringify(savedLists));
+            return true;
+        }
+        return false;
+    } catch (e) {
+        console.error('Failed to delete task list:', e);
+        return false;
+    }
+}
+
+/**
+ * Save current app parameters to localStorage
+ */
+function saveAppState(params) {
+    try {
+        localStorage.setItem('appState', JSON.stringify({
+            parameters: params,
+            savedAt: new Date().toISOString()
+        }));
+    } catch (e) {
+        console.error('Failed to save app state:', e);
+    }
+}
+
+/**
+ * Load previously saved app parameters
+ * @returns {Object|null} Saved parameters or null if none exist
+ */
+function loadAppState() {
+    try {
+        const state = JSON.parse(localStorage.getItem('appState') || 'null');
+        return state ? state.parameters : null;
+    } catch (e) {
+        console.error('Failed to load app state:', e);
+        return null;
+    }
 }
 
 /**

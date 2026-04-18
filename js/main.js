@@ -57,6 +57,9 @@ function initializeEventListeners() {
     const loadExampleBtn = document.getElementById('loadExampleBtn');
     const resetBtn = document.getElementById('resetBtn');
     const toggleAdvancedBtn = document.getElementById('toggleAdvanced');
+    const saveListBtn = document.getElementById('saveListBtn');
+    const loadListDropdown = document.getElementById('loadListDropdown');
+    const deleteSavedBtn = document.getElementById('deleteSavedBtn');
 
     if (optimizeBtn) {
         optimizeBtn.addEventListener('click', handleOptimize);
@@ -78,6 +81,19 @@ function initializeEventListeners() {
         toggleAdvancedBtn.addEventListener('click', handleToggleAdvanced);
     }
 
+    // Save/Load list handlers
+    if (saveListBtn) {
+        saveListBtn.addEventListener('click', handleSaveList);
+    }
+
+    if (loadListDropdown) {
+        loadListDropdown.addEventListener('change', handleLoadList);
+    }
+
+    if (deleteSavedBtn) {
+        deleteSavedBtn.addEventListener('click', handleDeleteSavedList);
+    }
+
     // Textarea input
     const taskInput = document.getElementById('taskInput');
     if (taskInput) {
@@ -85,6 +101,9 @@ function initializeEventListeners() {
         // Add live preview on input
         taskInput.addEventListener('input', loadTasks);
     }
+
+    // Initialize saved lists dropdown
+    updateSavedListsDropdown();
 }
 
 /**
@@ -408,7 +427,7 @@ function updateCurrentOrderDisplay() {
  */
 function renderTaskPreview() {
     const taskListPreview = document.getElementById('taskListPreview');
-    
+
     if (appState.tasks.length === 0) {
         taskListPreview.innerHTML = '<p class="empty-state">Enter tasks above to see preview</p>';
         return;
@@ -418,9 +437,9 @@ function renderTaskPreview() {
         const priorityClass = task.priority ? task.priority.toLowerCase() : 'medium';
         const completedClass = task.completed ? 'completed' : '';
         const displayText = task.displayText || task.text;
-        
+
         return `
-            <div class="task-card ${priorityClass} ${completedClass}">
+            <div class="task-card ${priorityClass} ${completedClass}" data-task-id="${task.id}">
                 <input type="checkbox" class="task-card-checkbox" ${task.completed ? 'checked' : ''}>
                 <div class="task-card-content">
                     <div class="task-card-header">
@@ -432,12 +451,44 @@ function renderTaskPreview() {
                         ${task.duration ? `<span class="task-badge duration">⏱️ ${task.duration}min</span>` : ''}
                     </div>
                 </div>
-                <span style="font-size: 0.75rem; color: var(--color-text-secondary);">#${task.id + 1}</span>
+                <button class="task-delete-btn" data-task-id="${task.id}" title="Delete this task">✕</button>
             </div>
         `;
     }).join('');
-    
+
     taskListPreview.innerHTML = cardsHtml;
+
+    // Add event listeners for delete buttons
+    taskListPreview.querySelectorAll('.task-delete-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const taskId = parseInt(btn.getAttribute('data-task-id'));
+            handleDeleteTask(taskId);
+        });
+    });
+}
+
+/**
+ * Handle delete task from list
+ */
+function handleDeleteTask(taskId) {
+    const taskInput = document.getElementById('taskInput');
+    if (!taskInput || taskId < 0 || taskId >= appState.tasks.length) return;
+
+    const taskToDelete = appState.tasks[taskId];
+
+    // Find and remove this task from textarea
+    const lines = taskInput.value.split('\n');
+    const newLines = lines.filter(line => {
+        const parsed = parseTasks(line.trim());
+        if (parsed.length === 0) return true; // Keep empty lines filtered by parseTasks
+        const parsedText = parsed[0].displayText || parsed[0].text;
+        const targetText = taskToDelete.displayText || taskToDelete.text;
+        return parsedText !== targetText;
+    });
+
+    taskInput.value = newLines.join('\n').trim();
+    loadTasks();
 }
 
 /**
@@ -475,6 +526,111 @@ function handleLoadExample() {
     if (taskInput) {
         taskInput.value = exampleTasks.join('\n');
         loadTasks();
+    }
+}
+
+/**
+ * Handle save list button
+ */
+function handleSaveList() {
+    const saveListName = document.getElementById('saveListName');
+    const name = saveListName ? saveListName.value.trim() : '';
+
+    if (!name) {
+        showValidationMessage('Please enter a name for the list', 'warning');
+        return;
+    }
+
+    if (appState.tasks.length === 0) {
+        showValidationMessage('No tasks to save', 'warning');
+        return;
+    }
+
+    const success = saveTaskList(name, appState.tasks);
+    if (success) {
+        showValidationMessage(`✅ Saved "${name}" with ${appState.tasks.length} tasks`, 'success');
+        if (saveListName) saveListName.value = '';
+        updateSavedListsDropdown();
+    } else {
+        showValidationMessage('Failed to save list', 'error');
+    }
+}
+
+/**
+ * Handle load list dropdown
+ */
+function handleLoadList(e) {
+    const listName = e.target.value;
+    if (!listName) {
+        document.getElementById('deleteSavedBtn').style.display = 'none';
+        return;
+    }
+
+    const tasks = loadTaskList(listName);
+    if (tasks) {
+        const taskInput = document.getElementById('taskInput');
+        if (taskInput) {
+            taskInput.value = tasks.join('\n');
+            loadTasks();
+            showValidationMessage(`✅ Loaded "${listName}"`, 'success');
+        }
+    }
+
+    document.getElementById('deleteSavedBtn').style.display = 'inline-block';
+}
+
+/**
+ * Handle delete saved list
+ */
+function handleDeleteSavedList() {
+    const loadListDropdown = document.getElementById('loadListDropdown');
+    const listName = loadListDropdown ? loadListDropdown.value : '';
+
+    if (!listName) {
+        showValidationMessage('No list selected', 'warning');
+        return;
+    }
+
+    if (confirm(`Delete "${listName}"?`)) {
+        const success = deleteTaskList(listName);
+        if (success) {
+            showValidationMessage(`✅ Deleted "${listName}"`, 'success');
+            loadListDropdown.value = '';
+            document.getElementById('deleteSavedBtn').style.display = 'none';
+            updateSavedListsDropdown();
+        }
+    }
+}
+
+/**
+ * Update saved lists dropdown with current saved lists
+ */
+function updateSavedListsDropdown() {
+    const loadListDropdown = document.getElementById('loadListDropdown');
+    if (!loadListDropdown) return;
+
+    const savedLists = getSavedTaskLists();
+    const currentValue = loadListDropdown.value;
+
+    // Clear options except the placeholder
+    loadListDropdown.innerHTML = '<option value="">📂 My Saved Lists</option>';
+
+    // Add saved lists sorted by name
+    const sortedLists = Object.keys(savedLists).sort();
+    sortedLists.forEach(name => {
+        const list = savedLists[name];
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = `${name} (${list.taskCount} tasks)`;
+        loadListDropdown.appendChild(option);
+    });
+
+    // Restore previous selection if it still exists
+    if (currentValue && sortedLists.includes(currentValue)) {
+        loadListDropdown.value = currentValue;
+    } else {
+        loadListDropdown.value = '';
+        document.getElementById('deleteSavedBtn').style.display = 'none';
     }
 }
 

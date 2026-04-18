@@ -53,6 +53,25 @@
                 </button>
             </div>
 
+            <!-- Save/Load Tasks Section -->
+            <div class="save-load-section">
+                <div class="save-load-group">
+                    <input type="text" id="saveListName" class="save-list-input" placeholder="Name for this list">
+                    <button id="saveListBtn" class="btn btn-secondary btn-sm" title="Save current tasks to my lists">
+                        💾 Save List
+                    </button>
+                </div>
+
+                <div class="load-saved-section">
+                    <select id="loadListDropdown" class="load-list-select" title="Load a previously saved task list">
+                        <option value="">📂 My Saved Lists</option>
+                    </select>
+                    <button id="deleteSavedBtn" class="btn btn-secondary btn-sm btn-danger" title="Delete the selected list" style="display:none;">
+                        🗑️ Delete
+                    </button>
+                </div>
+            </div>
+
             <!-- Task List Preview -->
             <div class="task-list-container">
                 <h3 class="task-list-title">📋 Task Preview</h3>
