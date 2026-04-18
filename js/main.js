@@ -821,6 +821,11 @@ function drawConvergenceGraph(history) {
         convergenceInfo.textContent = `Best improved by ${Math.abs(improvement)}% over ${history.length} iterations. Final distance: ${minLength.toFixed(1)}`;
     }
 }
+
+/**
+ * Handle keyboard shortcuts
+ */
+function handleKeyboardShortcuts(e) {
     // Ctrl+Enter or Cmd+Enter to optimize
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
@@ -844,6 +849,11 @@ function drawConvergenceGraph(history) {
         clearValidationMessage();
     }
 }
+
+/**
+ * Handle reset button
+ */
+function handleReset() {
     const taskInput = document.getElementById('taskInput');
     if (taskInput) {
         taskInput.value = '';
