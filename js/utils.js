@@ -415,17 +415,153 @@ function saveAppState(params) {
 }
 
 /**
- * Load previously saved app parameters
- * @returns {Object|null} Saved parameters or null if none exist
+ * Export optimized schedule in Markdown format
  */
-function loadAppState() {
-    try {
-        const state = JSON.parse(localStorage.getItem('appState') || 'null');
-        return state ? state.parameters : null;
-    } catch (e) {
-        console.error('Failed to load app state:', e);
-        return null;
+function exportMarkdown(tasks, optimizedOrder, result) {
+    const date = new Date().toLocaleDateString();
+    const time = new Date().toLocaleTimeString();
+
+    let md = `# 📋 Optimized Task Schedule\n\n`;
+    md += `**Generated:** ${date} at ${time}\n\n`;
+
+    if (result && result.improvementPercent) {
+        md += `## ✨ Optimization Results\n\n`;
+        md += `- **Route Improvement:** ${result.improvementPercent.toFixed(1)}%\n`;
+        md += `- **Distance Improved:** ${(result.improvement || 0).toFixed(1)} units\n`;
+        md += `- **Iterations:** ${result.iterations}\n`;
+        md += `- **Ants Used:** ${result.numAnts}\n\n`;
     }
+
+    md += `## 📝 Your Optimized Order\n\n`;
+
+    if (optimizedOrder && optimizedOrder.length > 0) {
+        optimizedOrder.forEach((taskIdx, idx) => {
+            const task = tasks[taskIdx];
+            const displayText = task.displayText || task.text;
+            const duration = task.duration ? ` ⏱️ ${task.duration}min` : '';
+            const priority = task.priority && task.priority !== 'Medium' ? ` 🏷️ ${task.priority}` : '';
+            md += `${idx + 1}. ${displayText}${duration}${priority}\n`;
+        });
+    } else {
+        tasks.forEach((task, idx) => {
+            const displayText = task.displayText || task.text;
+            const duration = task.duration ? ` ⏱️ ${task.duration}min` : '';
+            const priority = task.priority && task.priority !== 'Medium' ? ` 🏷️ ${task.priority}` : '';
+            md += `${idx + 1}. ${displayText}${duration}${priority}\n`;
+        });
+    }
+
+    md += `\n## 💭 Algorithm Info\n\n`;
+    md += `This schedule was optimized using Ant Colony Optimization (ACO), a swarm intelligence algorithm inspired by ant foraging behavior.\n`;
+
+    return md;
+}
+
+/**
+ * Export optimized schedule in JSON format
+ */
+function exportJSON(tasks, optimizedOrder, result) {
+    const schedule = {
+        exportedAt: new Date().toISOString(),
+        optimization: {
+            algorithm: 'Ant Colony Optimization',
+            improvementPercent: result ? result.improvementPercent : 0,
+            iterations: result ? result.iterations : 0,
+            antsUsed: result ? result.numAnts : 0
+        },
+        tasks: tasks.map((task, idx) => ({
+            id: idx,
+            text: task.text,
+            displayText: task.displayText || task.text,
+            priority: task.priority || 'Medium',
+            duration: task.duration || null,
+            emoji: task.emoji || '📝'
+        })),
+        optimizedOrder: optimizedOrder && optimizedOrder.length > 0
+            ? optimizedOrder.map((taskIdx, order) => ({
+                order: order + 1,
+                taskId: taskIdx,
+                task: tasks[taskIdx].displayText || tasks[taskIdx].text
+            }))
+            : tasks.map((task, idx) => ({
+                order: idx + 1,
+                taskId: idx,
+                task: task.displayText || task.text
+            }))
+    };
+
+    return JSON.stringify(schedule, null, 2);
+}
+
+/**
+ * Export optimized schedule in iCal format (basic)
+ */
+function exportiCal(tasks, optimizedOrder, result) {
+    let ical = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Ant To-Do List//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:Optimized Task Schedule
+X-WR-TIMEZONE:UTC
+`;
+
+    const startDate = new Date();
+    const schedule = optimizedOrder && optimizedOrder.length > 0
+        ? optimizedOrder.map((taskIdx, order) => ({ order, taskIdx }))
+        : tasks.map((_, taskIdx) => ({ order: taskIdx, taskIdx }));
+
+    schedule.forEach(({ order, taskIdx }) => {
+        const task = tasks[taskIdx];
+        const displayText = task.displayText || task.text;
+        const duration = task.duration || 60; // Default 60 minutes
+
+        // Create event start/end times
+        const eventStart = new Date(startDate);
+        eventStart.setMinutes(eventStart.getMinutes() + (order * duration));
+
+        const eventEnd = new Date(eventStart);
+        eventEnd.setMinutes(eventEnd.getMinutes() + duration);
+
+        const formatICalDate = (date) => {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            return `${year}${month}${day}T${hours}${minutes}${seconds}Z`;
+        };
+
+        ical += `BEGIN:VEVENT
+UID:task-${taskIdx}@anttodo
+DTSTAMP:${formatICalDate(new Date())}
+DTSTART:${formatICalDate(eventStart)}
+DTEND:${formatICalDate(eventEnd)}
+SUMMARY:${displayText}
+DESCRIPTION:Priority: ${task.priority}
+STATUS:TODO
+END:VEVENT
+`;
+    });
+
+    ical += `END:VCALENDAR`;
+    return ical;
+}
+
+/**
+ * Download file with given content
+ */
+function downloadFile(filename, content, mimeType = 'text/plain') {
+    const blob = new Blob([content], { type: mimeType });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
 }
 
 /**

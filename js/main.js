@@ -60,6 +60,9 @@ function initializeEventListeners() {
     const saveListBtn = document.getElementById('saveListBtn');
     const loadListDropdown = document.getElementById('loadListDropdown');
     const deleteSavedBtn = document.getElementById('deleteSavedBtn');
+    const exportMarkdownBtn = document.getElementById('exportMarkdownBtn');
+    const exportJsonBtn = document.getElementById('exportJsonBtn');
+    const exportIcalBtn = document.getElementById('exportIcalBtn');
 
     if (optimizeBtn) {
         optimizeBtn.addEventListener('click', handleOptimize);
@@ -94,6 +97,19 @@ function initializeEventListeners() {
         deleteSavedBtn.addEventListener('click', handleDeleteSavedList);
     }
 
+    // Export handlers
+    if (exportMarkdownBtn) {
+        exportMarkdownBtn.addEventListener('click', () => handleExport('markdown'));
+    }
+
+    if (exportJsonBtn) {
+        exportJsonBtn.addEventListener('click', () => handleExport('json'));
+    }
+
+    if (exportIcalBtn) {
+        exportIcalBtn.addEventListener('click', () => handleExport('ical'));
+    }
+
     // Textarea input
     const taskInput = document.getElementById('taskInput');
     if (taskInput) {
@@ -101,6 +117,9 @@ function initializeEventListeners() {
         // Add live preview on input
         taskInput.addEventListener('input', loadTasks);
     }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', handleKeyboardShortcuts);
 
     // Initialize saved lists dropdown
     updateSavedListsDropdown();
@@ -369,6 +388,17 @@ function displayResults(result) {
 
     explanationText.innerHTML = explanationMsg;
 
+    // Show export buttons
+    const exportButtons = document.getElementById('exportButtons');
+    if (exportButtons) {
+        exportButtons.style.display = 'flex';
+    }
+
+    // Draw convergence graph
+    if (result.history && result.history.length > 0) {
+        drawConvergenceGraph(result.history);
+    }
+
     // Update canvas message
     if (appState.visualization) {
         appState.visualization.displayMessage(`✅ Optimization complete! Distance improved by ${result.improvementPercent.toFixed(1)}%`);
@@ -635,9 +665,167 @@ function updateSavedListsDropdown() {
 }
 
 /**
- * Handle reset button
+ * Handle export in different formats
  */
-function handleReset() {
+function handleExport(format) {
+    if (!appState.optimizationResult) {
+        showValidationMessage('No optimization results to export', 'warning');
+        return;
+    }
+
+    const date = new Date();
+    const dateStr = date.toISOString().split('T')[0];
+    const timeStr = date.toTimeString().split(' ')[0].replace(/:/g, '-');
+
+    let content, filename, mimeType;
+
+    switch (format) {
+        case 'markdown':
+            content = exportMarkdown(appState.tasks, appState.optimizationResult.bestTour, appState.optimizationResult);
+            filename = `schedule_${dateStr}_${timeStr}.md`;
+            mimeType = 'text/markdown';
+            break;
+        case 'json':
+            content = exportJSON(appState.tasks, appState.optimizationResult.bestTour, appState.optimizationResult);
+            filename = `schedule_${dateStr}_${timeStr}.json`;
+            mimeType = 'application/json';
+            break;
+        case 'ical':
+            content = exportiCal(appState.tasks, appState.optimizationResult.bestTour, appState.optimizationResult);
+            filename = `schedule_${dateStr}_${timeStr}.ics`;
+            mimeType = 'text/calendar';
+            break;
+        default:
+            return;
+    }
+
+    downloadFile(filename, content, mimeType);
+    showValidationMessage(`✅ Downloaded ${format.toUpperCase()} file`, 'success');
+}
+
+/**
+ * Draw convergence graph showing best length over iterations
+ */
+function drawConvergenceGraph(history) {
+    const canvas = document.getElementById('convergenceCanvas');
+    if (!canvas || !history || history.length === 0) return;
+
+    const ctx = canvas.getContext('2d');
+    const width = canvas.offsetWidth;
+    const height = canvas.offsetHeight;
+
+    // Set canvas internal resolution
+    canvas.width = width * window.devicePixelRatio;
+    canvas.height = height * window.devicePixelRatio;
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+    // Get data ranges
+    const bestLengths = history.map(h => h.bestLength);
+    const minLength = Math.min(...bestLengths);
+    const maxLength = Math.max(...bestLengths);
+    const lengthRange = maxLength - minLength || 1;
+
+    // Margins and dimensions
+    const margin = { top: 20, right: 20, bottom: 30, left: 40 };
+    const graphWidth = width - margin.left - margin.right;
+    const graphHeight = height - margin.top - margin.bottom;
+
+    // Background
+    ctx.fillStyle = 'rgba(5, 7, 7, 0.5)';
+    ctx.fillRect(0, 0, width, height);
+
+    // Draw axes
+    ctx.strokeStyle = 'rgba(45, 106, 79, 0.5)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(margin.left, margin.top);
+    ctx.lineTo(margin.left, height - margin.bottom);
+    ctx.lineTo(width - margin.right, height - margin.bottom);
+    ctx.stroke();
+
+    // Axis labels
+    ctx.fillStyle = 'rgba(139, 149, 165, 1)';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Iterations', width / 2, height - 5);
+    ctx.save();
+    ctx.translate(10, height / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Best Path Length', 0, 0);
+    ctx.restore();
+
+    // Draw graph line
+    ctx.strokeStyle = '#d97706';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+
+    history.forEach((point, idx) => {
+        const x = margin.left + (idx / (history.length - 1)) * graphWidth;
+        const y = height - margin.bottom - ((point.bestLength - minLength) / lengthRange) * graphHeight;
+
+        if (idx === 0) {
+            ctx.moveTo(x, y);
+        } else {
+            ctx.lineTo(x, y);
+        }
+    });
+
+    ctx.stroke();
+
+    // Draw points
+    ctx.fillStyle = '#ff8a50';
+    history.forEach((point, idx) => {
+        const x = margin.left + (idx / (history.length - 1)) * graphWidth;
+        const y = height - margin.bottom - ((point.bestLength - minLength) / lengthRange) * graphHeight;
+
+        ctx.beginPath();
+        ctx.arc(x, y, 3, 0, Math.PI * 2);
+        ctx.fill();
+    });
+
+    // Highlight the final best point
+    if (history.length > 0) {
+        const lastPoint = history[history.length - 1];
+        const x = margin.left + graphWidth;
+        const y = height - margin.bottom - ((lastPoint.bestLength - minLength) / lengthRange) * graphHeight;
+
+        ctx.strokeStyle = '#4f9d6d';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, 6, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+
+    // Update info text
+    const improvement = ((minLength / maxLength - 1) * 100).toFixed(1);
+    const convergenceInfo = document.getElementById('convergenceInfo');
+    if (convergenceInfo) {
+        convergenceInfo.textContent = `Best improved by ${Math.abs(improvement)}% over ${history.length} iterations. Final distance: ${minLength.toFixed(1)}`;
+    }
+}
+    // Ctrl+Enter or Cmd+Enter to optimize
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        const optimizeBtn = document.getElementById('optimizeBtn');
+        if (optimizeBtn && !optimizeBtn.disabled) {
+            optimizeBtn.click();
+        }
+    }
+
+    // Ctrl+S or Cmd+S to save list
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        const saveListBtn = document.getElementById('saveListBtn');
+        if (saveListBtn) {
+            saveListBtn.click();
+        }
+    }
+
+    // Escape to clear validation message
+    if (e.key === 'Escape') {
+        clearValidationMessage();
+    }
+}
     const taskInput = document.getElementById('taskInput');
     if (taskInput) {
         taskInput.value = '';

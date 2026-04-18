@@ -27,7 +27,7 @@
                 <p class="panel-subtitle">Enter or paste your to-do list</p>
             </div>
 
-            <textarea id="taskInput" class="task-input" placeholder="1. Task one&#10;2. Task two&#10;3. Task three&#10;...">1. Reply to emails
+            <textarea id="taskInput" class="task-input" placeholder="1. Task one&#10;2. Task two&#10;3. Task three&#10;..." aria-label="Task input area - Enter your tasks here, one per line" role="textbox" aria-multiline="true">1. Reply to emails
 2. Fix bug in authentication
 3. Design new dashboard
 4. Meeting notes update
@@ -63,10 +63,10 @@
                 </div>
 
                 <div class="load-saved-section">
-                    <select id="loadListDropdown" class="load-list-select" title="Load a previously saved task list">
+                    <select id="loadListDropdown" class="load-list-select" title="Load a previously saved task list" aria-label="Load saved task lists dropdown">
                         <option value="">📂 My Saved Lists</option>
                     </select>
-                    <button id="deleteSavedBtn" class="btn btn-secondary btn-sm btn-danger" title="Delete the selected list" style="display:none;">
+                    <button id="deleteSavedBtn" class="btn btn-secondary btn-sm btn-danger" title="Delete the selected list" aria-label="Delete the selected task list" style="display:none;">
                         🗑️ Delete
                     </button>
                 </div>
@@ -92,8 +92,8 @@
                             🐜 Number of Ants
                             <span class="tooltip">ℹ️<span class="tooltip-text">More ants = more exploration but slower. Default: 25</span></span>
                         </label>
-                        <input type="range" id="numAnts" min="5" max="100" value="25" class="slider">
-                        <span id="numAntsValue" class="param-value">25</span>
+                        <input type="range" id="numAnts" min="5" max="100" value="25" class="slider" aria-label="Number of ants for optimization, 5 to 100">
+                        <span id="numAntsValue" class="param-value" aria-live="polite">25</span>
                     </div>
 
                     <div class="param-group">
@@ -101,8 +101,8 @@
                             🔄 Iterations
                             <span class="tooltip">ℹ️<span class="tooltip-text">More iterations = better convergence but slower. Default: 80</span></span>
                         </label>
-                        <input type="range" id="numIterations" min="10" max="200" value="80" class="slider">
-                        <span id="numIterationsValue" class="param-value">80</span>
+                        <input type="range" id="numIterations" min="10" max="200" value="80" class="slider" aria-label="Number of iterations, 10 to 200">
+                        <span id="numIterationsValue" class="param-value" aria-live="polite">80</span>
                     </div>
 
                     <div class="param-group">
@@ -110,8 +110,8 @@
                             α Pheromone Weight
                             <span class="tooltip">ℹ️<span class="tooltip-text">How much ants rely on previous paths. Default: 1.0</span></span>
                         </label>
-                        <input type="range" id="alpha" min="0.1" max="3" step="0.1" value="1.0" class="slider">
-                        <span id="alphaValue" class="param-value">1.0</span>
+                        <input type="range" id="alpha" min="0.1" max="3" step="0.1" value="1.0" class="slider" aria-label="Alpha pheromone weight, 0.1 to 3.0">
+                        <span id="alphaValue" class="param-value" aria-live="polite">1.0</span>
                     </div>
 
                     <div class="param-group">
@@ -119,8 +119,8 @@
                             β Heuristic Weight
                             <span class="tooltip">ℹ️<span class="tooltip-text">How much ants favor nearby tasks. Default: 5.0</span></span>
                         </label>
-                        <input type="range" id="beta" min="0.1" max="10" step="0.1" value="5.0" class="slider">
-                        <span id="betaValue" class="param-value">5.0</span>
+                        <input type="range" id="beta" min="0.1" max="10" step="0.1" value="5.0" class="slider" aria-label="Beta heuristic weight, 0.1 to 10.0">
+                        <span id="betaValue" class="param-value" aria-live="polite">5.0</span>
                     </div>
 
                     <div class="param-group">
@@ -128,8 +128,8 @@
                             ρ Evaporation Rate
                             <span class="tooltip">ℹ️<span class="tooltip-text">How quickly pheromone fades (0.1 slow, 0.3 fast). Default: 0.15</span></span>
                         </label>
-                        <input type="range" id="rho" min="0.05" max="0.5" step="0.05" value="0.15" class="slider">
-                        <span id="rhoValue" class="param-value">0.15</span>
+                        <input type="range" id="rho" min="0.05" max="0.5" step="0.05" value="0.15" class="slider" aria-label="Rho evaporation rate, 0.05 to 0.50">
+                        <span id="rhoValue" class="param-value" aria-live="polite">0.15</span>
                     </div>
 
                     <div class="param-group">
@@ -137,13 +137,13 @@
                             Q Pheromone Deposit
                             <span class="tooltip">ℹ️<span class="tooltip-text">Amount of pheromone each ant deposits. Default: 200</span></span>
                         </label>
-                        <input type="range" id="q" min="50" max="500" step="10" value="200" class="slider">
-                        <span id="qValue" class="param-value">200</span>
+                        <input type="range" id="q" min="50" max="500" step="10" value="200" class="slider" aria-label="Q pheromone deposit amount, 50 to 500">
+                        <span id="qValue" class="param-value" aria-live="polite">200</span>
                     </div>
                 </div>
             </div>
 
-            <button id="optimizeBtn" class="btn btn-primary" title="Start ACO optimization process">
+            <button id="optimizeBtn" class="btn btn-primary" title="Start ACO optimization process" aria-label="Optimize path with ACO colony - processes all tasks to find optimal order">
                 🚀 Optimize Path with ACO Colony
             </button>
         </div>
@@ -154,7 +154,7 @@
                 <h2>🐜 Colony Visualization</h2>
                 <p class="panel-subtitle">Watch ants discover the optimal path</p>
             </div>
-            <canvas id="canvas" class="visualization-canvas"></canvas>
+            <canvas id="canvas" class="visualization-canvas" aria-label="ACO visualization canvas showing task nodes and ant paths" role="img"></canvas>
             <div class="canvas-info">
                 <p id="canvasMessage">👉 Enter tasks and click "Optimize Path with ACO Colony" to begin</p>
             </div>
@@ -184,6 +184,19 @@
                 <div id="optimizedOrderList" class="results-list">
                     <p class="empty-state">Run ACO optimization to see results.</p>
                 </div>
+
+                <!-- Export Buttons -->
+                <div id="exportButtons" class="export-buttons" style="display:none;">
+                    <button id="exportMarkdownBtn" class="btn btn-secondary btn-sm" title="Download schedule as Markdown file" aria-label="Export optimized schedule as Markdown">
+                        📄 Markdown
+                    </button>
+                    <button id="exportJsonBtn" class="btn btn-secondary btn-sm" title="Download schedule as JSON file" aria-label="Export optimized schedule as JSON">
+                        📋 JSON
+                    </button>
+                    <button id="exportIcalBtn" class="btn btn-secondary btn-sm" title="Download schedule as iCal calendar file" aria-label="Export optimized schedule as iCal">
+                        📅 iCal
+                    </button>
+                </div>
             </div>
 
             <!-- Stats Section -->
@@ -192,6 +205,13 @@
                 <div id="statsContainer" class="metrics-grid">
                     <p class="empty-state">Awaiting optimization...</p>
                 </div>
+            </div>
+
+            <!-- Convergence Graph -->
+            <div class="results-section convergence-section">
+                <h3>📈 Convergence Graph</h3>
+                <canvas id="convergenceCanvas" class="convergence-graph" aria-label="Graph showing convergence of best path length over iterations"></canvas>
+                <p id="convergenceInfo" class="convergence-info"></p>
             </div>
 
             <!-- Explanation Section -->
@@ -216,7 +236,7 @@
             <div class="progress-bar">
                 <div id="progressFill" class="progress-fill"></div>
             </div>
-            <p id="progressText">Iteration 0/0</p>
+            <p id="progressText" aria-live="polite" aria-atomic="true"></p>
         </div>
     </div>
 

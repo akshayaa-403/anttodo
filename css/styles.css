@@ -590,7 +590,35 @@ body {
     border-color: #dc2626;
 }
 
-/* ============================================================================
+/* Export Buttons */
+.export-buttons {
+    display: flex;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-md);
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--color-border);
+    flex-wrap: wrap;
+}
+
+/* Convergence Graph */
+.convergence-section {
+    background-color: var(--color-bg-secondary);
+}
+
+.convergence-graph {
+    width: 100%;
+    height: 250px;
+    background: transparent;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    margin-bottom: var(--spacing-md);
+}
+
+.convergence-info {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    text-align: center;
+}
 
 .task-card.completed .task-text {
     text-decoration: line-through;
