@@ -335,18 +335,18 @@ function displayResults(result) {
     const statsContainer = document.getElementById('statsContainer');
     const explanationText = document.getElementById('explanation');
 
-    // Display current order
+    // Display current order (with HTML sanitization)
     const currentOrderHtml = appState.tasks
-        .map((task, idx) => `<li>${(idx + 1)}. ${truncateText(task.displayText || task.text, 30)}</li>`)
+        .map((task, idx) => `<li>${(idx + 1)}. ${sanitizeHtml(truncateText(task.displayText || task.text, 30))}</li>`)
         .join('');
     currentOrderList.innerHTML = `<ol>${currentOrderHtml}</ol>`;
 
-    // Display optimized order
+    // Display optimized order (with HTML sanitization)
     if (result.bestTour && result.bestTour.length > 0) {
         const optimizedOrderHtml = result.bestTour
             .map((taskIdx, displayIdx) => {
                 const task = appState.tasks[taskIdx];
-                return `<li>${(displayIdx + 1)}. ${truncateText(task.displayText || task.text, 30)}</li>`;
+                return `<li>${(displayIdx + 1)}. ${sanitizeHtml(truncateText(task.displayText || task.text, 30))}</li>`;
             })
             .join('');
         optimizedOrderList.innerHTML = `<ol>${optimizedOrderHtml}</ol>`;
@@ -359,22 +359,22 @@ function displayResults(result) {
     const statsHtml = `
         <div class="metric-card">
             <div class="metric-icon">⏱️</div>
-            <div class="metric-value">${timeSaved}min</div>
+            <div class="metric-value">${sanitizeHtml(timeSaved)}min</div>
             <div class="metric-label">Time Optimized</div>
         </div>
         <div class="metric-card">
             <div class="metric-icon">🔥</div>
-            <div class="metric-value">+${priorityBoost}%</div>
+            <div class="metric-value">+${sanitizeHtml(priorityBoost.toString())}%</div>
             <div class="metric-label">Urgency Gain</div>
         </div>
         <div class="metric-card">
             <div class="metric-icon">🐜</div>
-            <div class="metric-value">${result.iterations}</div>
+            <div class="metric-value">${sanitizeHtml(result.iterations.toString())}</div>
             <div class="metric-label">Iterations</div>
         </div>
         <div class="metric-card">
             <div class="metric-icon">🏆</div>
-            <div class="metric-value">${result.improvementPercent.toFixed(1)}%</div>
+            <div class="metric-value">${sanitizeHtml(result.improvementPercent.toFixed(1))}</div>
             <div class="metric-label">Route Improvement</div>
         </div>
     `;

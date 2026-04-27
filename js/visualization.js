@@ -50,8 +50,9 @@ class VisualizationEngine {
             trail: 'rgba(217, 119, 6, 0.6)',
         };
 
-        // Listen for resize
-        window.addEventListener('resize', () => this.resize());
+        // Listen for resize (store reference for cleanup)
+        this.resizeListener = () => this.resize();
+        window.addEventListener('resize', this.resizeListener);
 
         // Start animation loop
         this.animationFrameId = null;
@@ -68,8 +69,8 @@ class VisualizationEngine {
         this.width = rect.width;
         this.height = rect.height;
 
-        // Redraw static elements
-        if (this.position) {
+        // Redraw static elements (fixed typo: this.positions not this.position)
+        if (this.positions) {
             this.draw();
         }
     }
@@ -86,11 +87,23 @@ class VisualizationEngine {
     }
 
     /**
-     * Stop animation loop
+     * Stop animation loop and cleanup event listeners
      */
     stopAnimationLoop() {
         if (this.animationFrameId) {
             cancelAnimationFrame(this.animationFrameId);
+            this.animationFrameId = null;
+        }
+    }
+
+    /**
+     * Cleanup all resources (call before destroying visualization)
+     */
+    cleanup() {
+        this.stopAnimationLoop();
+        if (this.resizeListener) {
+            window.removeEventListener('resize', this.resizeListener);
+            this.resizeListener = null;
         }
     }
 
@@ -286,6 +299,7 @@ class VisualizationEngine {
                 const p1 = this.positions[i];
                 const p2 = this.positions[j];
 
+                this.ctx.save(); // Save context state
                 this.ctx.strokeStyle = color;
                 this.ctx.lineWidth = lineWidth;
                 this.ctx.globalAlpha = 0.6 + normalized * 0.4;
@@ -293,7 +307,7 @@ class VisualizationEngine {
                 this.ctx.moveTo(p1.x, p1.y);
                 this.ctx.lineTo(p2.x, p2.y);
                 this.ctx.stroke();
-                this.ctx.globalAlpha = 1;
+                this.ctx.restore(); // Restore context state
             }
         }
     }

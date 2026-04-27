@@ -17,14 +17,29 @@
  */
 function parseTasks(input) {
     if (!input || typeof input !== 'string') return [];
+    
+    // Validate input size (prevent DoS via huge inputs)
+    const maxInputLength = 50000;
+    if (input.length > maxInputLength) {
+        console.warn('Input exceeds maximum length of', maxInputLength, 'characters. Truncating.');
+        input = input.substring(0, maxInputLength);
+    }
 
     const lines = input.trim().split('\n');
     const seenTexts = new Set(); // Track duplicates
+    const maxTasksPerInput = 500; // Prevent excessive task parsing
+    const maxTaskLength = 1000; // Prevent extremely long task names
 
     return lines
+        .slice(0, maxTasksPerInput) // Limit total tasks parsed
         .map((line) => {
             // Skip empty or whitespace-only lines
             if (!line || !line.trim()) return null;
+            
+            // Enforce max task length
+            if (line.length > maxTaskLength) {
+                line = line.substring(0, maxTaskLength);
+            }
 
             // Remove various numbering formats:
             // "1. Task", "1) Task", "1] Task", "1: Task"
@@ -309,6 +324,22 @@ function lerp(a, b, t) {
  */
 function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
+}
+
+/**
+ * Sanitize HTML - Escape HTML entities to prevent XSS
+ * @param {string} text - Raw text that may contain HTML
+ * @returns {string} - HTML-safe escaped text
+ */
+function sanitizeHtml(text) {
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    };
+    return String(text).replace(/[&<>"']/g, char => map[char]);
 }
 
 /**
