@@ -12,11 +12,30 @@
 
 class VisualizationEngine {
     /**
-     * Initialize visualization
-     * @param {HTMLCanvasElement} canvas - Canvas DOM element
-     * @param {Object} positions - Task positions {taskId: {x, y}}
-     * @param {number} taskCount - Number of tasks
-     * @param {Array} tasks - Task list for node labels
+     * Initialize HTML5 Canvas visualization engine
+     * 
+     * Renders a real-time visualization of ACO algorithm:
+     * - Task nodes at fixed 2D positions
+     * - Pheromone trails as colored edges (intensity = pheromone level)
+     * - Animated ants marching along high-pheromone paths
+     * - Grid background for spatial reference
+     * - Final path celebration animation
+     * 
+     * Uses requestAnimationFrame for smooth 60 FPS animation.
+     * Canvas automatically resizes to fill container on window resize.
+     * 
+     * @param {HTMLCanvasElement} canvas - Canvas DOM element to render to
+     * @param {Object} positions - Task positions {taskId: {x, y}, ...}
+     * @param {number} taskCount - Number of tasks visualizing
+     * @param {Array<Object>} [tasks=[]] - Task array for labels (optional)
+     * 
+     * @example
+     * const viz = new VisualizationEngine(
+     *   document.getElementById('canvas'),
+     *   {0: {x: 100, y: 200}, 1: {x: 250, y: 150}},
+     *   2
+     * );
+     * viz.updateState({ ants, pheromones, bestTour });
      */
     constructor(canvas, positions, taskCount, tasks = []) {
         this.canvas = canvas;
@@ -516,8 +535,16 @@ class VisualizationEngine {
     }
 
     /**
-     * Update visualization with current state from ACO
-     * @param {Object} state - { ants, pheromones, bestTour, bestLength }
+     * Update visualization with current algorithm state
+     * Called each ACO iteration to refresh visuals.
+     * 
+     * Extracts and stores ant/pheromone data for rendering.
+     * Creates smooth animated ants from stationary ACO ants.
+     * 
+     * @param {Object} state - Algorithm state
+     * @param {Array<Object>} state.ants - Current ant population
+     * @param {Array<Array<number>>} state.pheromones - Pheromone matrix
+     * @param {Array<number>} state.bestTour - Current best tour found
      */
     updateState(state) {
         this.ants = state.ants || [];

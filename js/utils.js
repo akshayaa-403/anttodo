@@ -12,8 +12,30 @@
 
 /**
  * Parse tasks from textarea input
- * Handles numbered lists, bullet points, or plain lines
- * Returns array of {id, text, emoji, priority, duration, completed}
+ * Handles numbered lists, bullet points, or plain lines.
+ * Extracts metadata: priority, duration, emoji, completion status.
+ * 
+ * Input formats supported:
+ * - Numbered: "1. Task", "1) Task", "1: Task"
+ * - Bulleted: "- Task", "* Task", "• Task"
+ * - With emoji: "📝 Task"
+ * - With duration: "Task (30min)", "Task 1h"
+ * - With priority: "! Task", "Task (high priority)", "Task - urgent"
+ * - With completion: "✓ Task", "[x] Task", "[✓] Task"
+ * 
+ * @param {string} input - Raw textarea input text (may contain multiple lines)
+ * @returns {Array<Object>} Array of task objects: {id, text, emoji, priority, duration, completed}
+ * @returns {Object.id} {number} Unique task identifier (0-indexed)
+ * @returns {Object.text} {string} Cleaned task text
+ * @returns {Object.emoji} {string} Associated emoji (default: '📝')
+ * @returns {Object.priority} {string} Priority level ('High', 'Medium', 'Low')
+ * @returns {Object.duration} {number|null} Estimated duration in minutes (null if not specified)
+ * @returns {Object.completed} {boolean} Whether task is marked complete
+ * @returns {Object.displayText} {string} Formatted display text with emoji
+ * 
+ * @example
+ * parseTasks('1. Buy milk (30min)\n2. ! Reply to emails (high priority)')
+ * // Returns: [{id: 0, text: 'Buy milk', duration: 30, priority: 'Medium', ...}, ...]
  */
 function parseTasks(input) {
     if (!input || typeof input !== 'string') return [];
@@ -78,7 +100,18 @@ function parseTasks(input) {
 
 /**
  * Extract metadata from task text
- * Detects: priority, emoji, duration, completed status
+ * Analyzes text to detect and extract: priority level, emoji, duration estimate, completion status.
+ * Used internally by parseTasks() to enrich task data.
+ * 
+ * @param {string} text - Raw task text (may contain metadata indicators)
+ * @returns {Object} Enriched task metadata
+ * @returns {Object.emoji} {string} Extracted emoji (default: '📝')
+ * @returns {Object.priority} {string} Detected priority: 'High', 'Medium', or 'Low'
+ * @returns {Object.duration} {number|null} Estimated duration in minutes
+ * @returns {Object.completed} {boolean} Whether task is marked done
+ * @returns {Object.displayText} {string} Cleaned display text (emoji + text)
+ * 
+ * @private
  */
 function enhanceTaskData(text) {
     // Default values
@@ -182,9 +215,18 @@ class SeededRandom {
 }
 
 /**
- * Generate random 2D coordinates for tasks (seeded)
- * Positions are deterministic based on task count
- * Spread across a canvas-like area: [0, width] x [0, height]
+ * Generate random 2D coordinates for tasks using seeded random number generator
+ * Positions are deterministic and reproducible based on task count.
+ * Spreads tasks across canvas with padding to avoid edge clustering.
+ * 
+ * @param {number} numTasks - Number of tasks to position
+ * @param {number} [width=800] - Canvas width in pixels
+ * @param {number} [height=600] - Canvas height in pixels
+ * @returns {Object} Position map: { taskId: {x, y}, ... }
+ * 
+ * @example
+ * generateTaskPositions(5, 1000, 600)
+ * // Returns: {0: {x: 234.5, y: 123.4}, 1: {x: 456.7, y: 234.8}, ...}
  */
 function generateTaskPositions(numTasks, width = 800, height = 600) {
     // Use task count as seed for reproducibility
@@ -207,7 +249,18 @@ function generateTaskPositions(numTasks, width = 800, height = 600) {
 }
 
 /**
- * Euclidean distance between two 2D points
+ * Calculate Euclidean distance between two 2D points
+ * Used in distance matrix calculation for TSP.
+ * 
+ * Formula: distance = sqrt((x2-x1)² + (y2-y1)²)
+ * 
+ * @param {Object} p1 - First point {x, y}
+ * @param {number} p1.x - X coordinate
+ * @param {number} p1.y - Y coordinate
+ * @param {Object} p2 - Second point {x, y}
+ * @param {number} p2.x - X coordinate
+ * @param {number} p2.y - Y coordinate
+ * @returns {number} Euclidean distance between p1 and p2
  */
 function euclideanDistance(p1, p2) {
     const dx = p1.x - p2.x;
@@ -268,8 +321,16 @@ function nearestNeighborTour(distMatrix, taskCount) {
 }
 
 /**
- * Calculate total tour length (sum of edge distances)
- * tour is an array of task indices in order
+ * Calculate total tour length (sum of all edge distances)
+ * Used to evaluate quality of a solution.
+ * 
+ * @param {Array<number>} tour - Ordered array of task indices forming a tour
+ * @param {Array<Array<number>>} distMatrix - Distance matrix [i][j]
+ * @returns {number} Total tour length (sum of edge distances)
+ * 
+ * @example
+ * calculateTourLength([0, 2, 1, 3, 0], distMatrix)
+ * // Returns: distMatrix[0][2] + distMatrix[2][1] + ... + distMatrix[3][0]
  */
 function calculateTourLength(tour, distMatrix) {
     let length = 0;
@@ -280,7 +341,16 @@ function calculateTourLength(tour, distMatrix) {
 }
 
 /**
- * Truncate text to maximum length with ellipsis
+ * Truncate text to maximum length and append ellipsis
+ * Used for displaying long task names in UI.
+ * 
+ * @param {string} text - Text to truncate
+ * @param {number} [maxLength=20] - Maximum characters to display
+ * @returns {string} Truncated text with '…' suffix if over limit
+ * 
+ * @example
+ * truncateText('This is a very long task name', 15)
+ * // Returns: 'This is a very …'
  */
 function truncateText(text, maxLength = 20) {
     if (text.length <= maxLength) return text;
@@ -327,9 +397,17 @@ function clamp(value, min, max) {
 }
 
 /**
- * Sanitize HTML - Escape HTML entities to prevent XSS
- * @param {string} text - Raw text that may contain HTML
- * @returns {string} - HTML-safe escaped text
+ * Sanitize HTML - Escape HTML entities to prevent XSS injection
+ * Converts dangerous HTML characters to their entity equivalents.
+ * Use whenever rendering user-provided text via innerHTML.
+ * 
+ * Escapes: & < > " '
+ * 
+ * @param {string} text - Raw text that may contain HTML/JS
+ * @returns {string} HTML-safe escaped text
+ * @example
+ * sanitizeHtml('<img src=x onerror="alert()">')
+ * // Returns: '&lt;img src=x onerror=&quot;alert()&quot;&gt;'
  */
 function sanitizeHtml(text) {
     const map = {
@@ -350,9 +428,17 @@ function sleep(ms) {
 }
 
 /**
- * Save task list to localStorage
- * @param {string} name - Name to save the list under
- * @param {Array} tasks - Array of task objects
+ * Save task list to browser localStorage for persistence
+ * Creates or overwrites a saved list with current tasks.
+ * 
+ * @param {string} name - Display name for the saved list
+ * @param {Array<Object>} tasks - Array of task objects to save
+ * @returns {boolean} True if saved successfully, false on error (quota exceeded, etc.)
+ * @throws {Error} Logs but doesn't throw; returns false on localStorage errors
+ * 
+ * @example
+ * saveTaskList('My Tasks', [{id: 0, text: 'Task 1', ...}])
+ * // Stores under localStorage['savedTaskLists']['My Tasks']
  */
 function saveTaskList(name, tasks) {
     if (!name || name.trim() === '') return false;
@@ -374,9 +460,15 @@ function saveTaskList(name, tasks) {
 }
 
 /**
- * Load task list from localStorage
- * @param {string} name - Name of the saved list
- * @returns {Array|null} Array of task texts or null if not found
+ * Load task list from browser localStorage
+ * Retrieves a previously saved task list by name.
+ * 
+ * @param {string} name - Display name of the saved list to load
+ * @returns {Array<string>|null} Array of task text strings, or null if list not found
+ * 
+ * @example
+ * loadTaskList('My Tasks')
+ * // Returns: ['Task 1', 'Task 2', 'Task 3'] or null
  */
 function loadTaskList(name) {
     try {

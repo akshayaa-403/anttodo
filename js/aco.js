@@ -19,10 +19,29 @@
 
 class AntColonyOptimizer {
     /**
-     * Initialize ACO parameters
-     * @param {number} taskCount - Number of tasks (cities)
-     * @param {Array} distMatrix - 2D distance matrix
-     * @param {Object} params - Configuration parameters
+     * Initialize Ant Colony Optimizer with ACO parameters
+     * 
+     * The ACO algorithm simulates the collective behavior of ants to solve TSP.
+     * Ants deposit pheromone on good paths, creating positive feedback that guides
+     * the colony toward better solutions. Over iterations, pheromone accumulates
+     * on shorter tours, and evaporates from longer ones.
+     * 
+     * @param {number} taskCount - Number of tasks (vertices in TSP)
+     * @param {Array<Array<number>>} distMatrix - Distance matrix [i][j] between all task pairs
+     * @param {Object} [params={}] - Configuration parameters
+     * @param {number} [params.numAnts=25] - Number of ants exploring solutions (more = slower but better coverage)
+     * @param {number} [params.numIterations=80] - Number of algorithm iterations
+     * @param {number} [params.alpha=1.0] - Pheromone importance weight (τ^α in selection)
+     * @param {number} [params.beta=5.0] - Heuristic importance weight (η^β in selection, higher = greedier)
+     * @param {number} [params.rho=0.15] - Pheromone evaporation rate (0-1, higher = more forgetting)
+     * @param {number} [params.Q=200] - Pheromone deposit constant (higher = stronger reinforcement)
+     * 
+     * @example
+     * const optimizer = new AntColonyOptimizer(
+     *   5,
+     *   distMatrix,
+     *   { numAnts: 30, numIterations: 100, alpha: 1.2, beta: 4.0 }
+     * );
      */
     constructor(taskCount, distMatrix, params = {}) {
         this.taskCount = taskCount;
@@ -47,9 +66,16 @@ class AntColonyOptimizer {
     }
 
     /**
-     * Initialize pheromone trails
-     * Sets initial pheromone to τ₀ = 1 / (n × L_nn)
-     * where L_nn is nearest-neighbor tour length
+     * Initialize pheromone trails with heuristically informed values
+     * 
+     * Initial pheromone level τ₀ = 1 / (n × L_nn) where:
+     * - n = number of tasks
+     * - L_nn = tour length from nearest-neighbor heuristic
+     * 
+     * This scaling ensures pheromone values start in a reasonable range
+     * that plays well with the algorithm's probability calculations.
+     * 
+     * @private
      */
     initializePheromones() {
         // Calculate nearest-neighbor baseline
@@ -100,8 +126,31 @@ class AntColonyOptimizer {
 
     /**
      * MAIN ALGORITHM: Run ACO for specified iterations
-     * Callback is invoked each iteration for progress/visualization updates
-     * @param {Function} onIterationComplete - Callback(iterationNumber, bestLength, ants, pheromones)
+     * 
+     * Executes the Ant System algorithm:
+     * 1. Ants construct tours probabilistically (phase 1)
+     * 2. Pheromones evaporate globally (phase 3)
+     * 3. Best ant deposits reinforcement (elitist strategy)
+     * 4. Visualization callback invoked each iteration
+     * 
+     * Uses async/await to yield to event loop (prevent UI freeze).
+     * 
+     * @async
+     * @param {Function} [onIterationComplete=null] - Callback invoked each iteration
+     * @param {number} onIterationComplete.iteration - Iteration number (0-indexed)
+     * @param {number} onIterationComplete.bestLength - Best tour length found so far
+     * @param {Array<Object>} onIterationComplete.ants - Current ant population state
+     * @param {Array<Array<number>>} onIterationComplete.pheromones - Pheromone matrix at this iteration
+     * 
+     * @returns {Promise<Object>} Result object
+     * @returns {Promise<Object.bestTour} {Array<number>} Best tour found (list of task indices)
+     * @returns {Promise<Object.bestLength} {number} Length of best tour
+     * @returns {Promise<Object.history} {Array<Object>} Iteration history (if tracking enabled)
+     * 
+     * @example
+     * const result = await optimizer.optimize((iter, bestLen, ants, pheromones) => {
+     *   console.log(`Iteration ${iter}: Best = ${bestLen.toFixed(2)}`);
+     * });
      */
     async optimize(onIterationComplete = null) {
         for (let iter = 0; iter < this.numIterations; iter++) {
@@ -152,9 +201,18 @@ class AntColonyOptimizer {
     }
 
     /**
-     * PHASE 1: Ant Tour Construction
-     * Each ant builds a complete tour by probabilistically choosing next city
-     * Based on pheromone levels and heuristic desirability
+     * PHASE 1: Construct tours for all ants in population
+     * 
+     * Each ant builds a complete tour step-by-step:
+     * 1. Start at random city
+     * 2. At each step, probabilistically select next unvisited city
+     * 3. Probability ∝ [pheromone^α] × [heuristic^β]
+     * 4. Repeat until all cities visited
+     * 
+     * This stochastic tour construction creates diversity in solutions,
+     * allowing exploration of different paths.
+     * 
+     * @private
      */
     constructTours() {
         // Start each ant at random city
@@ -183,11 +241,21 @@ class AntColonyOptimizer {
     }
 
     /**
-     * Probabilistically select next city for ant
-     * Probability ∝ [pheromone^α] × [heuristic^β]
-     * @param {Object} ant - Ant state
+     * Probabilistically select next city for ant using roulette wheel selection
+     * 
+     * Probability of choosing city j from city i:
+     *   P(j) = (τ_ij^α × η_ij^β) / Σ(τ_ik^α × η_ik^β)  for all unvisited k
+     * 
+     * Where:
+     * - τ_ij = pheromone level on edge i→j
+     * - η_ij = 1/distance_ij (heuristic: closer cities more desirable)
+     * - α = pheromone importance weight
+     * - β = heuristic importance weight
+     * 
+     * @private
+     * @param {Object} ant - Ant state {tour, visited, ...}
      * @param {number} currentCity - Current city index
-     * @returns {number} Next city index (-1 if all visited)
+     * @returns {number} Next city index to visit (-1 if all visited)
      */
     selectNextCity(ant, currentCity) {
         const possibleCities = [];
