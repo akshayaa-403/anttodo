@@ -128,20 +128,34 @@ const CONFIG = {
      * Algorithm Convergence & Performance
      */
     PERFORMANCE: {
-        // Max tasks to handle
-        MAX_TASKS_VISUALIZATION: 50,
-
-        // Canvas redraw optimization: skip frames if needed
         TARGET_FPS: 60,
-        FRAME_TIME_MS: 1000 / 60, // ~16.67ms
+        FRAME_INTERVAL_MS: 1000 / 60,
 
-        // Sampling: how many ants to visualize (for performance)
-        MAX_VISIBLE_ANTS: 12,
+        ENABLE_DIRTY_RECTS: true,
+        DIRTY_RECT_PADDING: 5,
 
-        // Pheromone normalization cache (recalculate every N frames)
-        PHEROMONE_RECALC_FREQUENCY: 1, // Recalc every frame (1 = always)
+        CACHE_PHEROMONE_MINMAX: true,
+        PHEROMONE_CACHE_UPDATE_INTERVAL: 5,
+
+        ANT_POSITION_INTERPOLATION_STEPS: 4,
+        MAX_ANTS_VISIBLE: 100,
+
+        USE_OFFSCREEN_CANVAS: false,
+        CANVAS_ANTIALIAS: true,
+
+        THROTTLE_RENDER_ON_BACKGROUND: true,
+        BACKGROUND_FPS_CAP: 15,
+
+        BATCH_EDGE_DRAWING: true,
+        MAX_EDGES_PER_FRAME: 200,
     },
-
+    DEBUG: {
+        SHOW_FPS_COUNTER: false,
+        SHOW_RENDER_TIME: false,
+        LOG_SLOW_OPERATIONS: true,
+        SLOW_OPERATION_THRESHOLD_MS: 16,
+    },
+    
     /**
      * Accessibility & Responsive Design
      */

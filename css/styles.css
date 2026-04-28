@@ -1277,6 +1277,39 @@ body {
     }
 }
 
+/* Performance optimizations */
+#antCanvas {
+    /* Enable GPU acceleration */
+    transform: translateZ(0);
+    will-change: transform;
+    
+    /* Prevent anti-aliasing blur on animation */
+    image-rendering: crisp-edges;
+    
+    /* Hardware acceleration hint */
+    backface-visibility: hidden;
+}
+
+/* Reduce paint operations during animation */
+.controls, .task-list {
+    will-change: auto;
+}
+
+/* Optional: Show FPS counter (for debugging) */
+.fps-counter {
+    position: fixed;
+    bottom: 10px;
+    right: 10px;
+    background: rgba(0,0,0,0.7);
+    color: #0f0;
+    font-family: monospace;
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    z-index: 9999;
+    pointer-events: none;
+}
+
 /* ============================================================================
    VALIDATION MESSAGE
    ============================================================================ */

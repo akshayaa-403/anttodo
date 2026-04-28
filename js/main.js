@@ -206,18 +206,8 @@ async function handleOptimize() {
         // Show loading overlay
         showLoadingOverlay();
 
-        // Force animation duration (1.5-2.5 seconds minimum)
-        const animationDuration = 1500 + Math.random() * 1000;
-        const startTime = Date.now();
-
         // Run ACO optimization with callback for real-time visualization
         const result = await runOptimization();
-
-        // Wait remaining time for animation
-        const elapsedTime = Date.now() - startTime;
-        if (elapsedTime < animationDuration) {
-            await sleep(animationDuration - elapsedTime);
-        }
 
         // Hide loading overlay
         hideLoadingOverlay();
@@ -948,6 +938,59 @@ function setupCanvasHover() {
 
 // Initialize canvas hover on load
 document.addEventListener('DOMContentLoaded', setupCanvasHover);
+
+function generateTaskPositions() {
+    const canvas = document.getElementById('antCanvas');
+    if (!canvas) return [];
+    
+    // Wait for canvas to be properly sized
+    const rect = canvas.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
+    
+    if (width === 0 || height === 0) {
+        // Canvas not ready yet, schedule retry
+        setTimeout(() => generateTaskPositions(), 50);
+        return [];
+    }
+    
+    const padding = 50;
+    const positions = [];
+    
+    for (let i = 0; i < appState.tasks.length; i++) {
+        positions.push({
+            x: padding + Math.random() * (width - 2 * padding),
+            y: padding + Math.random() * (height - 2 * padding)
+        });
+    }
+    
+    return positions;
+}
+
+const performanceMonitor = {
+    frameTimes: [],
+    lastFrameTime: 0,
+    
+    start() {
+        this.lastFrameTime = performance.now();
+    },
+    
+    end() {
+        const now = performance.now();
+        const frameTime = now - this.lastFrameTime;
+        this.frameTimes.push(frameTime);
+        
+        if (this.frameTimes.length > 60) {
+            const avg = this.frameTimes.reduce((a, b) => a + b, 0) / this.frameTimes.length;
+            if (avg > 30) {
+                console.warn(`Performance warning: Average frame time ${avg.toFixed(2)}ms (${(1000/avg).toFixed(0)} FPS)`);
+            }
+            this.frameTimes = [];
+        }
+        
+        this.lastFrameTime = now;
+    }
+};
 
 /**
  * Handle window resize - regenerate task positions for responsive canvas

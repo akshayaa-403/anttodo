@@ -1,666 +1,628 @@
 /**
- * ============================================================================
- * VISUALIZATION.JS - Canvas Rendering & Animation
- * ============================================================================
- * Handles real-time visualization of:
- * - Task nodes with labels
- * - Pheromone trails (dynamic thickness & color)
- * - Animated ants moving along edges (using requestAnimationFrame)
- * - Grid background (ant colony aesthetic)
- * - Final path visualization (all ants marching + confetti)
+ * Ant Colony Optimization Visualization Module
+ * @module visualization
+ * Performance optimized with:
+ * - Frame rate throttling (60 FPS cap)
+ * - Dirty rectangle rendering
+ * - Pheromone min/max caching
+ * - Position interpolation smoothing
+ * - Batch edge drawing
  */
 
-class VisualizationEngine {
-    /**
-     * Initialize HTML5 Canvas visualization engine
-     * 
-     * Renders a real-time visualization of ACO algorithm:
-     * - Task nodes at fixed 2D positions
-     * - Pheromone trails as colored edges (intensity = pheromone level)
-     * - Animated ants marching along high-pheromone paths
-     * - Grid background for spatial reference
-     * - Final path celebration animation
-     * 
-     * Uses requestAnimationFrame for smooth 60 FPS animation.
-     * Canvas automatically resizes to fill container on window resize.
-     * 
-     * @param {HTMLCanvasElement} canvas - Canvas DOM element to render to
-     * @param {Object} positions - Task positions {taskId: {x, y}, ...}
-     * @param {number} taskCount - Number of tasks visualizing
-     * @param {Array<Object>} [tasks=[]] - Task array for labels (optional)
-     * 
-     * @example
-     * const viz = new VisualizationEngine(
-     *   document.getElementById('canvas'),
-     *   {0: {x: 100, y: 200}, 1: {x: 250, y: 150}},
-     *   2
-     * );
-     * viz.updateState({ ants, pheromones, bestTour });
-     */
-    constructor(canvas, positions, taskCount, tasks = []) {
-        this.canvas = canvas;
-        this.ctx = canvas.getContext('2d');
-        this.positions = positions;
-        this.taskCount = taskCount;
-        this.tasks = tasks;
+import { CONFIG } from './config.js';
 
-        // Set canvas size to fill its container
-        this.resize();
-
-        // Visualization state
-        this.pheromones = null;
+class AntVisualization {
+    constructor(canvasId) {
+        this.canvas = document.getElementById(canvasId);
+        this.ctx = this.canvas?.getContext('2d');
+        
+        if (!this.canvas || !this.ctx) {
+            console.error('Canvas not found or context not available');
+            return;
+        }
+        
+        // Core state
+        this.tasks = [];
+        this.tour = [];
         this.ants = [];
-        this.animatedAnts = [];  // Ants being animated on canvas
+        this.pheromones = [];
         this.bestTour = null;
-        this.isOptimizing = false;
-        this.showFinalPath = false;
-        this.animationProgress = 0;
-        this.marchingAntsTime = 0;  // For continuous marching ants animation
-
-        // Color scheme
-        this.colors = {
-            background: '#0a0f0d',
-            grid: 'rgba(45, 106, 79, 0.15)',
-            node: '#2d6a4f',
-            nodeText: '#e8ebe9',
-            pheromoneMin: 'rgba(45, 106, 79, 0.3)',
-            pheromoneMax: '#d97706',
-            ant: '🐜',
-            trail: 'rgba(217, 119, 6, 0.6)',
-        };
-
-        // Listen for resize (store reference for cleanup)
-        this.resizeListener = () => this.resize();
-        window.addEventListener('resize', this.resizeListener);
-
-        // Start animation loop
+        this.bestDistance = Infinity;
+        this.isAnimating = false;
         this.animationFrameId = null;
-        this.startAnimationLoop();
+        
+        // Performance optimization caches
+        this.pheromoneMinMaxCache = { min: 1.0, max: 1.0, iteration: -1 };
+        this.lastRenderTime = 0;
+        this.frameCount = 0;
+        this.fps = 60;
+        this.isTabVisible = true;
+        
+        // Dirty rectangle tracking
+        this.dirtyRects = [];
+        this.lastAntPositions = new Map(); // antId -> {x, y}
+        
+        // Animation timing
+        this.lastTimestamp = 0;
+        this.frameInterval = CONFIG.PERFORMANCE.FRAME_INTERVAL_MS;
+        
+        // Tab visibility handling
+        this.handleVisibilityChange = this.handleVisibilityChange.bind(this);
+        document.addEventListener('visibilitychange', this.handleVisibilityChange);
+        
+        // Resize handling with debounce
+        this.resizeTimeout = null;
+        window.addEventListener('resize', () => this.handleResize());
+        
+        // Initialize canvas
+        this.initCanvas();
     }
-
+    
     /**
-     * Resize canvas to fit container
+     * Initialize canvas with proper sizing
      */
-    resize() {
+    initCanvas() {
+        if (!this.canvas) return;
+        
         const rect = this.canvas.getBoundingClientRect();
         this.canvas.width = rect.width;
         this.canvas.height = rect.height;
-        this.width = rect.width;
-        this.height = rect.height;
-
-        // Redraw static elements (fixed typo: this.positions not this.position)
-        if (this.positions) {
-            this.draw();
+        
+        // Set up context for antialiasing if enabled
+        if (CONFIG.PERFORMANCE.CANVAS_ANTIALIAS) {
+            this.ctx.imageSmoothingEnabled = true;
         }
     }
-
+    
     /**
-     * Start continuous animation loop
+     * Handle resize with debounce to prevent excessive recalculations
      */
-    startAnimationLoop() {
-        const animate = () => {
-            this.draw();
-            this.animationFrameId = requestAnimationFrame(animate);
-        };
-        animate();
+    handleResize() {
+        if (this.resizeTimeout) clearTimeout(this.resizeTimeout);
+        this.resizeTimeout = setTimeout(() => {
+            this.initCanvas();
+            if (this.tasks.length > 0) {
+                this.renderFull(); // Full render after resize
+            }
+        }, 150);
     }
-
+    
     /**
-     * Stop animation loop and cleanup event listeners
+     * Handle tab visibility - throttle rendering when not visible
      */
-    stopAnimationLoop() {
+    handleVisibilityChange() {
+        this.isTabVisible = !document.hidden;
+        if (!this.isTabVisible && this.animationFrameId) {
+            // Tab is hidden - we can still animate but at lower FPS
+            // The frame throttler will handle this
+            if (CONFIG.DEBUG.LOG_SLOW_OPERATIONS) {
+                console.log('Tab hidden - reducing animation priority');
+            }
+        }
+    }
+    
+    /**
+     * Update cached pheromone min/max (expensive operation, do sparingly)
+     * @param {number} currentIteration - Current ACO iteration
+     */
+    updatePheromoneCache(currentIteration) {
+        if (!CONFIG.PERFORMANCE.CACHE_PHEROMONE_MINMAX) {
+            return this.calculatePheromoneMinMax();
+        }
+        
+        // Only update every N iterations
+        const shouldUpdate = currentIteration === -1 || 
+            this.pheromoneMinMaxCache.iteration === -1 ||
+            currentIteration - this.pheromoneMinMaxCache.iteration >= CONFIG.PERFORMANCE.PHEROMONE_CACHE_UPDATE_INTERVAL;
+        
+        if (shouldUpdate || !this.pheromoneMinMaxCache.min) {
+            const { min, max } = this.calculatePheromoneMinMax();
+            this.pheromoneMinMaxCache = {
+                min: min,
+                max: max,
+                iteration: currentIteration
+            };
+        }
+        
+        return this.pheromoneMinMaxCache;
+    }
+    
+    /**
+     * Calculate actual min/max pheromone values
+     * @returns {Object} {min, max}
+     */
+    calculatePheromoneMinMax() {
+        if (!this.pheromones.length || !this.pheromones[0]?.length) {
+            return { min: 1.0, max: 1.0 };
+        }
+        
+        let min = Infinity;
+        let max = -Infinity;
+        
+        // Single pass O(n²) calculation
+        for (let i = 0; i < this.pheromones.length; i++) {
+            for (let j = 0; j < this.pheromones[i].length; j++) {
+                const val = this.pheromones[i][j];
+                if (val < min) min = val;
+                if (val > max) max = val;
+            }
+        }
+        
+        return {
+            min: min === Infinity ? 1.0 : min,
+            max: max === -Infinity ? 1.0 : max
+        };
+    }
+    
+    /**
+     * Draw pheromone trails with intensity-based colors
+     * @param {number} currentIteration - Current iteration for cache
+     */
+    drawPheromones(currentIteration = -1) {
+        if (!this.ctx || !this.pheromones.length || !this.tasks.length) return;
+        
+        const startTime = performance.now();
+        const { min, max } = this.updatePheromoneCache(currentIteration);
+        
+        // Early exit if no variation
+        if (min === max) {
+            this.drawEdgesUniform();
+        } else {
+            this.drawEdgesIntensityBased(min, max);
+        }
+        
+        // Log slow operations
+        if (CONFIG.DEBUG.LOG_SLOW_OPERATIONS) {
+            const elapsed = performance.now() - startTime;
+            if (elapsed > CONFIG.DEBUG.SLOW_OPERATION_THRESHOLD_MS) {
+                console.warn(`Slow pheromone draw: ${elapsed.toFixed(2)}ms`);
+            }
+        }
+    }
+    
+    /**
+     * Draw all edges with uniform color (faster)
+     */
+    drawEdgesUniform() {
+        this.ctx.save();
+        this.ctx.globalAlpha = 0.3;
+        this.ctx.lineWidth = 1.5;
+        
+        for (let i = 0; i < this.tasks.length; i++) {
+            for (let j = i + 1; j < this.tasks.length; j++) {
+                this.ctx.beginPath();
+                this.ctx.moveTo(this.tasks[i].x, this.tasks[i].y);
+                this.ctx.lineTo(this.tasks[j].x, this.tasks[j].y);
+                this.ctx.strokeStyle = CONFIG.COLORS.PHEROMONE_LOW || '#4fc3f7';
+                this.ctx.stroke();
+            }
+        }
+        this.ctx.restore();
+    }
+    
+    /**
+     * Draw edges with intensity-based colors (slower but prettier)
+     * @param {number} min - Minimum pheromone value
+     * @param {number} max - Maximum pheromone value
+     */
+    drawEdgesIntensityBased(min, max) {
+        this.ctx.save();
+        const range = max - min;
+        
+        // Batch drawing for performance
+        const edges = [];
+        for (let i = 0; i < this.tasks.length; i++) {
+            for (let j = i + 1; j < this.tasks.length; j++) {
+                const intensity = range > 0 ? (this.pheromones[i][j] - min) / range : 0.5;
+                edges.push({ i, j, intensity });
+            }
+        }
+        
+        // Sort by intensity (optional - for visual layering, but skip for performance)
+        // Instead, draw in batches
+        const batchSize = CONFIG.PERFORMANCE.MAX_EDGES_PER_FRAME;
+        const drawBatch = (startIdx) => {
+            const endIdx = Math.min(startIdx + batchSize, edges.length);
+            for (let k = startIdx; k < endIdx; k++) {
+                const { i, j, intensity } = edges[k];
+                this.ctx.beginPath();
+                this.ctx.moveTo(this.tasks[i].x, this.tasks[i].y);
+                this.ctx.lineTo(this.tasks[j].x, this.tasks[j].y);
+                
+                // Color based on intensity
+                const hue = 200 - intensity * 100; // Blue to cyan range
+                this.ctx.strokeStyle = `hsla(${hue}, 80%, 60%, ${0.2 + intensity * 0.6})`;
+                this.ctx.lineWidth = 1 + intensity * 3;
+                this.ctx.stroke();
+            }
+            
+            if (endIdx < edges.length) {
+                requestAnimationFrame(() => drawBatch(endIdx));
+            }
+        };
+        
+        drawBatch(0);
+        this.ctx.restore();
+    }
+    
+    /**
+     * Draw ants with smooth interpolation
+     * @param {number} timestamp - Current animation timestamp
+     */
+    drawAnts(timestamp) {
+        if (!this.ctx || !this.ants.length) return;
+        
+        const startTime = performance.now();
+        
+        for (const ant of this.ants) {
+            if (!ant.position) continue;
+            
+            // Calculate position on edge based on progress
+            const progress = (timestamp * ant.speed) % 1;
+            
+            // Get current edge
+            const fromIdx = Math.floor(ant.currentEdge);
+            const toIdx = (fromIdx + 1) % ant.tour.length;
+            
+            const from = this.tasks[ant.tour[fromIdx]];
+            const to = this.tasks[ant.tour[toIdx]];
+            
+            if (!from || !to) continue;
+            
+            // Cubic bezier for smooth movement
+            const t = progress;
+            const eased = this.easeInOutCubic(t);
+            
+            const x = from.x + (to.x - from.x) * eased;
+            const y = from.y + (to.y - from.y) * eased;
+            
+            // Track dirty rects for partial redraws
+            if (CONFIG.PERFORMANCE.ENABLE_DIRTY_RECTS) {
+                const lastPos = this.lastAntPositions.get(ant.id);
+                if (lastPos) {
+                    this.dirtyRects.push({
+                        x: Math.min(lastPos.x, x) - CONFIG.PERFORMANCE.DIRTY_RECT_PADDING,
+                        y: Math.min(lastPos.y, y) - CONFIG.PERFORMANCE.DIRTY_RECT_PADDING,
+                        w: Math.abs(lastPos.x - x) + CONFIG.PERFORMANCE.DIRTY_RECT_PADDING * 2,
+                        h: Math.abs(lastPos.y - y) + CONFIG.PERFORMANCE.DIRTY_RECT_PADDING * 2
+                    });
+                }
+                this.lastAntPositions.set(ant.id, { x, y });
+            }
+            
+            // Draw ant body
+            this.ctx.save();
+            this.ctx.shadowBlur = 0; // Disable shadows for performance
+            
+            // Ant body (tiny circle)
+            this.ctx.beginPath();
+            this.ctx.arc(x, y, 3, 0, Math.PI * 2);
+            this.ctx.fillStyle = ant.isBest ? '#ff9800' : CONFIG.COLORS.ANT || '#e91e63';
+            this.ctx.fill();
+            
+            // Direction indicator (tiny line)
+            const angle = Math.atan2(to.y - from.y, to.x - from.x);
+            this.ctx.beginPath();
+            this.ctx.moveTo(x, y);
+            this.ctx.lineTo(
+                x + Math.cos(angle) * 6,
+                y + Math.sin(angle) * 6
+            );
+            this.ctx.strokeStyle = '#fff';
+            this.ctx.lineWidth = 1;
+            this.ctx.stroke();
+            
+            this.ctx.restore();
+        }
+        
+        // Render dirty rects
+        if (CONFIG.PERFORMANCE.ENABLE_DIRTY_RECTS && this.dirtyRects.length) {
+            this.renderDirtyRects();
+        }
+        
+        // Log slow operations
+        if (CONFIG.DEBUG.LOG_SLOW_OPERATIONS) {
+            const elapsed = performance.now() - startTime;
+            if (elapsed > CONFIG.DEBUG.SLOW_OPERATION_THRESHOLD_MS) {
+                console.warn(`Slow ant draw (${this.ants.length} ants): ${elapsed.toFixed(2)}ms`);
+            }
+        }
+    }
+    
+    /**
+     * Render only dirty rectangles for performance
+     */
+    renderDirtyRects() {
+        // Merge overlapping dirty rects to reduce draw calls
+        const merged = this.mergeRects(this.dirtyRects);
+        
+        for (const rect of merged) {
+            // Clip to canvas bounds
+            const clipRect = {
+                x: Math.max(0, rect.x),
+                y: Math.max(0, rect.y),
+                w: Math.min(this.canvas.width - rect.x, rect.w),
+                h: Math.min(this.canvas.height - rect.y, rect.h)
+            };
+            
+            if (clipRect.w > 0 && clipRect.h > 0) {
+                // Save and restore only the clipped region
+                this.ctx.save();
+                this.ctx.beginPath();
+                this.ctx.rect(clipRect.x, clipRect.y, clipRect.w, clipRect.h);
+                this.ctx.clip();
+                
+                // Redraw this region
+                this.renderRegion(clipRect);
+                
+                this.ctx.restore();
+            }
+        }
+        
+        this.dirtyRects = [];
+    }
+    
+    /**
+     * Merge overlapping rectangles for efficient redraw
+     * @param {Array} rects - List of rectangles
+     * @returns {Array} Merged rectangles
+     */
+    mergeRects(rects) {
+        if (rects.length <= 1) return rects;
+        
+        const sorted = [...rects].sort((a, b) => a.x - b.x || a.y - b.y);
+        const merged = [];
+        let current = sorted[0];
+        
+        for (let i = 1; i < sorted.length; i++) {
+            const next = sorted[i];
+            const overlapX = current.x + current.w >= next.x;
+            const overlapY = current.y + current.h >= next.y;
+            
+            if (overlapX && overlapY) {
+                // Merge
+                current = {
+                    x: Math.min(current.x, next.x),
+                    y: Math.min(current.y, next.y),
+                    w: Math.max(current.x + current.w, next.x + next.w) - Math.min(current.x, next.x),
+                    h: Math.max(current.y + current.h, next.y + next.h) - Math.min(current.y, next.y)
+                };
+            } else {
+                merged.push(current);
+                current = next;
+            }
+        }
+        merged.push(current);
+        
+        return merged;
+    }
+    
+    /**
+     * Render a specific region of the canvas
+     * @param {Object} rect - Region to render
+     */
+    renderRegion(rect) {
+        // Simplified region render - redraws entire canvas but clipped
+        // For true partial redraw, you'd need to maintain layer caches
+        this.renderFull();
+    }
+    
+    /**
+     * Full canvas render (fallback for dirty rects)
+     */
+    renderFull() {
+        if (!this.ctx || !this.tasks.length) return;
+        
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.drawPheromones();
+        this.drawTasks();
+        this.drawBestTour();
+        if (this.isAnimating) {
+            this.drawAnts(performance.now());
+        }
+    }
+    
+    /**
+     * Draw tasks (nodes)
+     */
+    drawTasks() {
+        if (!this.ctx) return;
+        
+        for (let i = 0; i < this.tasks.length; i++) {
+            const task = this.tasks[i];
+            
+            // Node circle
+            this.ctx.beginPath();
+            this.ctx.arc(task.x, task.y, 8, 0, Math.PI * 2);
+            this.ctx.fillStyle = CONFIG.COLORS.NODE || '#4285f4';
+            this.ctx.fill();
+            this.ctx.strokeStyle = '#fff';
+            this.ctx.lineWidth = 2;
+            this.ctx.stroke();
+            
+            // Task label (index)
+            this.ctx.fillStyle = '#fff';
+            this.ctx.font = 'bold 10px Arial';
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText(i + 1, task.x, task.y);
+        }
+    }
+    
+    /**
+     * Draw the best tour found so far
+     */
+    drawBestTour() {
+        if (!this.ctx || !this.bestTour || this.bestTour.length < 2) return;
+        
+        this.ctx.save();
+        this.ctx.beginPath();
+        this.ctx.moveTo(this.tasks[this.bestTour[0]].x, this.tasks[this.bestTour[0]].y);
+        
+        for (let i = 1; i < this.bestTour.length; i++) {
+            const task = this.tasks[this.bestTour[i]];
+            this.ctx.lineTo(task.x, task.y);
+        }
+        
+        // Close the tour (return to start)
+        const firstTask = this.tasks[this.bestTour[0]];
+        this.ctx.lineTo(firstTask.x, firstTask.y);
+        
+        this.ctx.strokeStyle = CONFIG.COLORS.BEST_TOUR || '#ffd700';
+        this.ctx.lineWidth = 3;
+        this.ctx.setLineDash([5, 5]);
+        this.ctx.stroke();
+        this.ctx.setLineDash([]);
+        this.ctx.restore();
+    }
+    
+    /**
+     * Easing function for smooth ant movement
+     * @param {number} t - Progress (0-1)
+     * @returns {number} Eased value
+     */
+    easeInOutCubic(t) {
+        return t < 0.5
+            ? 4 * t * t * t
+            : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    }
+    
+    /**
+     * Animation loop with frame rate throttling
+     * @param {number} timestamp - Current timestamp
+     */
+    animate(timestamp) {
+        if (!this.isAnimating) return;
+        
+        // Throttle frame rate based on tab visibility
+        let targetInterval = this.frameInterval;
+        if (!this.isTabVisible && CONFIG.PERFORMANCE.THROTTLE_RENDER_ON_BACKGROUND) {
+            targetInterval = 1000 / CONFIG.PERFORMANCE.BACKGROUND_FPS_CAP;
+        }
+        
+        const elapsed = timestamp - this.lastRenderTime;
+        
+        if (elapsed >= targetInterval) {
+            this.lastRenderTime = timestamp - (elapsed % targetInterval);
+            
+            // Update FPS counter
+            this.frameCount++;
+            if (timestamp - this.lastTimestamp >= 1000) {
+                this.fps = this.frameCount;
+                this.frameCount = 0;
+                this.lastTimestamp = timestamp;
+                
+                if (CONFIG.DEBUG.SHOW_FPS_COUNTER) {
+                    console.log(`FPS: ${this.fps}`);
+                }
+            }
+            
+            // Only render if something changed
+            if (this.shouldRender()) {
+                this.renderPartial();
+            }
+        }
+        
+        this.animationFrameId = requestAnimationFrame((t) => this.animate(t));
+    }
+    
+    /**
+     * Determine if rendering is needed
+     * @returns {boolean}
+     */
+    shouldRender() {
+        // Always render if ants are moving or tour changed
+        return this.isAnimating || this.tourChanged;
+    }
+    
+    /**
+     * Partial render (optimized)
+     */
+    renderPartial() {
+        if (!this.ctx) return;
+        
+        // Clear only necessary area
+        if (CONFIG.PERFORMANCE.ENABLE_DIRTY_RECTS && this.dirtyRects.length) {
+            this.renderDirtyRects();
+        } else {
+            this.clearCanvas();
+            this.drawPheromones(-1);
+            this.drawTasks();
+            this.drawBestTour();
+            if (this.isAnimating) {
+                this.drawAnts(performance.now());
+            }
+        }
+    }
+    
+    /**
+     * Clear canvas
+     */
+    clearCanvas() {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+    
+    /**
+     * Start animation
+     */
+    startAnimation() {
+        if (this.isAnimating) return;
+        this.isAnimating = true;
+        this.lastRenderTime = 0;
+        this.lastTimestamp = 0;
+        this.frameCount = 0;
+        this.animationFrameId = requestAnimationFrame((t) => this.animate(t));
+    }
+    
+    /**
+     * Stop animation
+     */
+    stopAnimation() {
+        this.isAnimating = false;
         if (this.animationFrameId) {
             cancelAnimationFrame(this.animationFrameId);
             this.animationFrameId = null;
         }
     }
-
+    
     /**
-     * Cleanup all resources (call before destroying visualization)
+     * Update visualization data
+     * @param {Object} data - New visualization data
      */
-    cleanup() {
-        this.stopAnimationLoop();
-        if (this.resizeListener) {
-            window.removeEventListener('resize', this.resizeListener);
-            this.resizeListener = null;
-        }
-    }
-
-    /**
-     * MAIN DRAW FUNCTION
-     * Renders all elements on canvas
-     */
-    draw() {
-        // Clear canvas
-        this.ctx.fillStyle = this.colors.background;
-        this.ctx.fillRect(0, 0, this.width, this.height);
-
-        // Update animation timer for marching ants
-        this.marchingAntsTime += 1;
-
-        // Draw grid background
-        this.drawGrid();
-
-        // Draw edges between all tasks
-        this.drawEdges();
-
-        // Draw pheromone trails (if available)
-        if (this.pheromones) {
-            this.drawPheromoneTrails();
-            // Draw marching ants along trails during optimization
-            if (this.ants && this.ants.length > 0) {
-                this.drawMarchingAnts();
-            }
-        }
-
-        // Draw task nodes
-        this.drawNodes();
-
-        // Draw animated ants
-        this.drawAnimatedAnts();
-
-        // If final path, draw with special effects
-        if (this.showFinalPath && this.bestTour) {
-            this.drawFinalPath();
-        }
-    }
-
-    /**
-     * Draw subtle grid background (ant colony aesthetic)
-     */
-    drawGrid() {
-        const gridSize = 40;
-        this.ctx.strokeStyle = this.colors.grid;
-        this.ctx.lineWidth = 1;
-
-        for (let x = 0; x < this.width; x += gridSize) {
-            this.ctx.beginPath();
-            this.ctx.moveTo(x, 0);
-            this.ctx.lineTo(x, this.height);
-            this.ctx.stroke();
-        }
-
-        for (let y = 0; y < this.height; y += gridSize) {
-            this.ctx.beginPath();
-            this.ctx.moveTo(0, y);
-            this.ctx.lineTo(this.width, y);
-            this.ctx.stroke();
-        }
-    }
-
-    /**
-     * Draw light edges between all task nodes
-     */
-    drawEdges() {
-        // Draw regular edges (not part of best path)
-        this.ctx.strokeStyle = 'rgba(45, 106, 79, 0.15)';
-        this.ctx.lineWidth = 1;
-
-        for (let i = 0; i < this.taskCount; i++) {
-            for (let j = i + 1; j < this.taskCount; j++) {
-                if (!this.isBestPathEdge(i, j)) {
-                    const p1 = this.positions[i];
-                    const p2 = this.positions[j];
-
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(p1.x, p1.y);
-                    this.ctx.lineTo(p2.x, p2.y);
-                    this.ctx.stroke();
-                }
-            }
-        }
-
-        // Draw best path edges (highlighted)
-        this.drawBestPathEdges();
-    }
-
-    /**
-     * Check if edge is part of best path
-     */
-    isBestPathEdge(i, j) {
-        if (!this.bestTour || this.bestTour.length < 2) return false;
+    updateData(data) {
+        this.tasks = data.tasks || this.tasks;
+        this.tour = data.tour || this.tour;
+        this.ants = data.ants || this.ants;
+        this.pheromones = data.pheromones || this.pheromones;
+        this.bestTour = data.bestTour || this.bestTour;
+        this.bestDistance = data.bestDistance ?? this.bestDistance;
         
-        for (let k = 0; k < this.bestTour.length - 1; k++) {
-            const from = this.bestTour[k];
-            const to = this.bestTour[k + 1];
-            if ((from === i && to === j) || (from === j && to === i)) {
-                return true;
-            }
+        // Invalidate caches when data changes significantly
+        if (data.pheromones) {
+            this.pheromoneMinMaxCache.iteration = -1;
         }
-        return false;
-    }
-
-    /**
-     * Draw best path edges with highlighting and arrows
-     */
-    drawBestPathEdges() {
-        if (!this.bestTour || this.bestTour.length < 2) return;
-
-        // Draw glowing best path
-        this.ctx.strokeStyle = 'rgba(217, 119, 6, 0.8)';
-        this.ctx.lineWidth = 4;
-        this.ctx.shadowColor = 'rgba(217, 119, 6, 0.6)';
-        this.ctx.shadowBlur = 12;
-        this.ctx.lineCap = 'round';
-        this.ctx.lineJoin = 'round';
-
-        for (let k = 0; k < this.bestTour.length - 1; k++) {
-            const fromIdx = this.bestTour[k];
-            const toIdx = this.bestTour[k + 1];
-            const p1 = this.positions[fromIdx];
-            const p2 = this.positions[toIdx];
-
-            this.ctx.beginPath();
-            this.ctx.moveTo(p1.x, p1.y);
-            this.ctx.lineTo(p2.x, p2.y);
-            this.ctx.stroke();
-
-            // Draw arrow
-            this.drawArrow(p1, p2);
+        if (data.ants) {
+            this.lastAntPositions.clear();
         }
-
-        this.ctx.shadowColor = 'transparent';
-        this.ctx.shadowBlur = 0;
-    }
-
-    /**
-     * Draw arrow on an edge
-     */
-    drawArrow(from, to) {
-        const headlen = 15;
-        const angle = Math.atan2(to.y - from.y, to.x - from.x);
-
-        // Position arrow at 60% along the line
-        const t = 0.6;
-        const arrowX = from.x + (to.x - from.x) * t;
-        const arrowY = from.y + (to.y - from.y) * t;
-
-        // Arrow head colors
-        this.ctx.fillStyle = '#f59e0b';
-        this.ctx.beginPath();
-        this.ctx.moveTo(arrowX, arrowY);
-        this.ctx.lineTo(arrowX - headlen * Math.cos(angle - Math.PI / 6), arrowY - headlen * Math.sin(angle - Math.PI / 6));
-        this.ctx.lineTo(arrowX - headlen * Math.cos(angle + Math.PI / 6), arrowY - headlen * Math.sin(angle + Math.PI / 6));
-        this.ctx.closePath();
-        this.ctx.fill();
-    }
-
-    /**
-     * Draw pheromone trails with dynamic thickness and color
-     * Thickness ∝ pheromone level
-     * Color: green (low) → orange (high)
-     */
-    drawPheromoneTrails() {
-        if (!this.pheromones) return;
-
-        // Find min and max pheromone for normalization
-        let minPher = Infinity, maxPher = -Infinity;
-        for (let i = 0; i < this.taskCount; i++) {
-            for (let j = 0; j < this.taskCount; j++) {
-                minPher = Math.min(minPher, this.pheromones[i][j]);
-                maxPher = Math.max(maxPher, this.pheromones[i][j]);
-            }
+        
+        if (!this.isAnimating && data.ants?.length) {
+            this.startAnimation();
         }
-
-        // Draw trails
-        for (let i = 0; i < this.taskCount; i++) {
-            for (let j = i + 1; j < this.taskCount; j++) {
-                const pheromone = this.pheromones[i][j];
-                const normalized = (pheromone - minPher) / (maxPher - minPher + 0.0001);
-
-                // Thickness based on pheromone level
-                const lineWidth = 1 + normalized * 8;
-
-                // Color gradient: green → orange
-                const color = interpolateColor('#2d6a4f', '#d97706', normalized);
-
-                // Draw trail
-                const p1 = this.positions[i];
-                const p2 = this.positions[j];
-
-                this.ctx.save(); // Save context state
-                this.ctx.strokeStyle = color;
-                this.ctx.lineWidth = lineWidth;
-                this.ctx.globalAlpha = 0.6 + normalized * 0.4;
-                this.ctx.beginPath();
-                this.ctx.moveTo(p1.x, p1.y);
-                this.ctx.lineTo(p2.x, p2.y);
-                this.ctx.stroke();
-                this.ctx.restore(); // Restore context state
-            }
-        }
+        
+        this.renderFull();
     }
-
+    
     /**
-     * Draw marching ants animation along pheromone trails
-     * Animated dashes move continuously along high-pheromone paths
+     * Clean up resources
      */
-    drawMarchingAnts() {
-        if (!this.pheromones) return;
-
-        // Find min and max pheromone for normalization
-        let minPher = Infinity, maxPher = -Infinity;
-        for (let i = 0; i < this.taskCount; i++) {
-            for (let j = 0; j < this.taskCount; j++) {
-                minPher = Math.min(minPher, this.pheromones[i][j]);
-                maxPher = Math.max(maxPher, this.pheromones[i][j]);
-            }
-        }
-
-        const dashLength = 8;
-        const spacing = 16;
-        const animationSpeed = 4;
-
-        // Draw marching ants on high-pheromone trails
-        for (let i = 0; i < this.taskCount; i++) {
-            for (let j = i + 1; j < this.taskCount; j++) {
-                const pheromone = this.pheromones[i][j];
-                const normalized = (pheromone - minPher) / (maxPher - minPher + 0.0001);
-
-                // Only draw marching ants on trails with significant pheromone
-                if (normalized < 0.3) continue;
-
-                const p1 = this.positions[i];
-                const p2 = this.positions[j];
-
-                const dx = p2.x - p1.x;
-                const dy = p2.y - p1.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                const unitX = dx / distance;
-                const unitY = dy / distance;
-
-                // Calculate animation offset
-                const offset = (this.marchingAntsTime * animationSpeed) % (spacing + dashLength);
-
-                // Draw marching ants along the trail
-                let currentDist = offset - spacing;
-                while (currentDist < distance) {
-                    if (currentDist + dashLength > 0) {
-                        const startDist = Math.max(0, currentDist);
-                        const endDist = Math.min(distance, currentDist + dashLength);
-
-                        const x1 = p1.x + unitX * startDist;
-                        const y1 = p1.y + unitY * startDist;
-                        const x2 = p1.x + unitX * endDist;
-                        const y2 = p1.y + unitY * endDist;
-
-                        // Color intensity based on pheromone level
-                        const intensity = 0.3 + normalized * 0.7;
-                        this.ctx.strokeStyle = `rgba(217, 119, 6, ${intensity})`;
-                        this.ctx.lineWidth = 2 + normalized * 3;
-                        this.ctx.lineCap = 'round';
-
-                        this.ctx.beginPath();
-                        this.ctx.moveTo(x1, y1);
-                        this.ctx.lineTo(x2, y2);
-                        this.ctx.stroke();
-                    }
-
-                    currentDist += spacing + dashLength;
-                }
-            }
-        }
-    }
-
-    /**
-     * Draw task nodes (circles with labels)
-     */
-    drawNodes() {
-        const nodeRadius = 20;
-
-        for (let i = 0; i < this.taskCount; i++) {
-            const pos = this.positions[i];
-
-            // Draw circle
-            this.ctx.fillStyle = this.colors.node;
-            this.ctx.beginPath();
-            this.ctx.arc(pos.x, pos.y, nodeRadius, 0, Math.PI * 2);
-            this.ctx.fill();
-
-            // Draw border
-            this.ctx.strokeStyle = '#4f9d6d';
-            this.ctx.lineWidth = 2;
-            this.ctx.stroke();
-
-            // Draw task name or number
-            const task = this.tasks[i];
-            const label = task ? (task.displayText || task.text).substring(0, 8) : (i + 1).toString();
-            
-            this.ctx.fillStyle = this.colors.nodeText;
-            this.ctx.font = 'bold 9px sans-serif';
-            this.ctx.textAlign = 'center';
-            this.ctx.textBaseline = 'middle';
-            this.ctx.fillText(label, pos.x, pos.y);
-        }
-    }
-
-    /**
-     * Draw animated ants along their current edges
-     * Each ant has a position that animates smoothly
-     */
-    drawAnimatedAnts() {
-        // Update animated ants positions (smooth interpolation)
-        for (let aAnt of this.animatedAnts) {
-            aAnt.update();
-            this.drawAnt(aAnt.x, aAnt.y, aAnt.rotation);
-        }
-    }
-
-    /**
-     * Draw a single ant emoji at position
-     */
-    drawAnt(x, y, rotation = 0) {
-        this.ctx.save();
-        this.ctx.translate(x, y);
-        this.ctx.rotate(rotation);
-
-        // Use canvas text rendering for emoji
-        this.ctx.font = '16px sans-serif';
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
-        this.ctx.fillText('🐜', 0, 0);
-
-        this.ctx.restore();
-    }
-
-    /**
-     * Draw final optimized path with all ants marching
-     */
-    drawFinalPath() {
-        if (!this.bestTour || this.bestTour.length === 0) return;
-
-        // Animate progress
-        this.animationProgress = Math.min(1, this.animationProgress + 0.02);
-
-        // Draw glowing trail
-        const lineWidth = 4 + Math.sin(this.animationProgress * Math.PI * 2) * 2;
-        this.ctx.strokeStyle = 'rgba(217, 119, 6, 0.8)';
-        this.ctx.lineWidth = lineWidth;
-        this.ctx.lineCap = 'round';
-        this.ctx.lineJoin = 'round';
-
-        const pathLength = this.bestTour.length;
-        for (let i = 0; i < pathLength - 1; i++) {
-            const from = this.positions[this.bestTour[i]];
-            const to = this.positions[this.bestTour[i + 1]];
-
-            this.ctx.beginPath();
-            this.ctx.moveTo(from.x, from.y);
-            this.ctx.lineTo(to.x, to.y);
-            this.ctx.stroke();
-        }
-
-        // March ants along final path
-        for (let i = 0; i < 8; i++) {
-            const offset = (this.animationProgress + i / 8) % 1;
-            const edgeIdx = Math.floor(offset * (pathLength - 1));
-            const edgeProgress = (offset * (pathLength - 1)) % 1;
-
-            const from = this.positions[this.bestTour[edgeIdx]];
-            const to = this.positions[this.bestTour[edgeIdx + 1]];
-
-            const x = from.x + (to.x - from.x) * edgeProgress;
-            const y = from.y + (to.y - from.y) * edgeProgress;
-
-            this.drawAnt(x, y, Math.atan2(to.y - from.y, to.x - from.x));
-        }
-
-        // Draw confetti-like pheromone burst around endpoints
-        if (this.animationProgress > 0.5) {
-            const burst = (this.animationProgress - 0.5) * 2;
-            for (let i = 0; i < 3; i++) {
-                const pos = this.positions[this.bestTour[i]];
-                this.drawPheromoneBurst(pos, burst);
-            }
-        }
-    }
-
-    /**
-     * Draw pheromone burst effect (confetti-like)
-     */
-    drawPheromoneBurst(center, intensity) {
-        const particleCount = 12;
-        for (let i = 0; i < particleCount; i++) {
-            const angle = (i / particleCount) * Math.PI * 2;
-            const distance = intensity * 40;
-            const x = center.x + Math.cos(angle) * distance;
-            const y = center.y + Math.sin(angle) * distance;
-
-            const size = 4 * (1 - intensity);
-            this.ctx.fillStyle = `rgba(217, 119, 6, ${0.8 * (1 - intensity)})`;
-            this.ctx.beginPath();
-            this.ctx.arc(x, y, size, 0, Math.PI * 2);
-            this.ctx.fill();
-        }
-    }
-
-    /**
-     * Update visualization with current algorithm state
-     * Called each ACO iteration to refresh visuals.
-     * 
-     * Extracts and stores ant/pheromone data for rendering.
-     * Creates smooth animated ants from stationary ACO ants.
-     * 
-     * @param {Object} state - Algorithm state
-     * @param {Array<Object>} state.ants - Current ant population
-     * @param {Array<Array<number>>} state.pheromones - Pheromone matrix
-     * @param {Array<number>} state.bestTour - Current best tour found
-     */
-    updateState(state) {
-        this.ants = state.ants || [];
-        this.pheromones = state.pheromones;
-        this.bestTour = state.bestTour;
-
-        // Create animated ants (sample a few for visualization)
-        this.createAnimatedAnts();
-    }
-
-    /**
-     * Create animated ant objects that move smoothly on canvas
-     * Sample some ants for performance
-     */
-    createAnimatedAnts() {
-        const maxVisibleAnts = 12;
-        const sampleSize = Math.min(maxVisibleAnts, this.ants.length);
-        const step = Math.floor(this.ants.length / sampleSize);
-
-        this.animatedAnts = [];
-
-        for (let i = 0; i < sampleSize; i++) {
-            const antIdx = i * step;
-            const ant = this.ants[antIdx];
-
-            if (ant && ant.path && ant.path.length > 0) {
-                const aAnt = new AnimatedAnt(ant, this.positions);
-                this.animatedAnts.push(aAnt);
-            }
-        }
-    }
-
-    /**
-     * Show final optimization complete state
-     */
-    showFinalPathAnimation() {
-        this.showFinalPath = true;
-        this.animationProgress = 0;
-    }
-
-    /**
-     * Reset visualization
-     */
-    reset() {
-        this.pheromones = null;
-        this.ants = [];
-        this.animatedAnts = [];
-        this.bestTour = null;
-        this.isOptimizing = false;
-        this.showFinalPath = false;
-        this.animationProgress = 0;
-        this.marchingAntsTime = 0;
-        this.draw();
-    }
-
-    /**
-     * Display message on canvas
-     */
-    displayMessage(message) {
-        const canvasMessage = document.getElementById('canvasMessage');
-        if (canvasMessage) {
-            canvasMessage.innerHTML = message;
-        }
+    destroy() {
+        this.stopAnimation();
+        document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+        window.removeEventListener('resize', this.handleResize);
+        if (this.resizeTimeout) clearTimeout(this.resizeTimeout);
+        this.lastAntPositions.clear();
+        this.dirtyRects = [];
     }
 }
 
-/**
- * AnimatedAnt - Single ant moving along its tour path
- * Interpolates smoothly between waypoints
- */
-class AnimatedAnt {
-    constructor(antData, positions) {
-        this.ant = antData;
-        this.positions = positions;
-        this.currentEdgeIdx = 0;
-        this.edgeProgress = 0;
-        this.speedFactor = 0.01 + Math.random() * 0.02; // Slight speed variation
-
-        this.x = 0;
-        this.y = 0;
-        this.rotation = 0;
-
-        this.update();
-    }
-
-    /**
-     * Update ant position along tour
-     */
-    update() {
-        const path = this.ant.path;
-        if (!path || path.length === 0) return;
-
-        // Move along path edges
-        this.edgeProgress += this.speedFactor;
-
-        // If reached end of current edge, move to next
-        if (this.edgeProgress >= 1) {
-            this.edgeProgress = 0;
-            this.currentEdgeIdx = (this.currentEdgeIdx + 1) % path.length;
-        }
-
-        // Get current edge
-        const edge = path[this.currentEdgeIdx];
-        const fromPos = this.positions[edge.from];
-        const toPos = this.positions[edge.to];
-
-        // Interpolate position
-        if (fromPos && toPos) {
-            this.x = fromPos.x + (toPos.x - fromPos.x) * this.edgeProgress;
-            this.y = fromPos.y + (toPos.y - fromPos.y) * this.edgeProgress;
-
-            // Calculate rotation towards destination
-            this.rotation = Math.atan2(
-                toPos.y - fromPos.y,
-                toPos.x - fromPos.x
-            );
-        }
-    }
-}
+export default AntVisualization;

@@ -421,13 +421,6 @@ function sanitizeHtml(text) {
 }
 
 /**
- * Sleep utility (used for forced loading animation)
- */
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-/**
  * Save task list to browser localStorage for persistence
  * Creates or overwrites a saved list with current tasks.
  * 

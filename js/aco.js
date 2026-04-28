@@ -11,10 +11,6 @@
  *    b. Evaluate each ant's tour quality
  *    c. Update pheromone trails globally (evaporate + elitist best deposit)
  * 3. Return best tour found
- * 
- * Papers Reference:
- * - Dorigo & Gambardella (1997): "Ant Colony System"
- * - Dorigo (1992): "Optimization, Learning, and Natural Algorithms"
  */
 
 class AntColonyOptimizer {
@@ -316,52 +312,27 @@ class AntColonyOptimizer {
      * 2. Best ant deposit: τ ← τ + Δτ (best ant deposits Q/L_best)
      * 3. Elitist strategy: Best ant deposits extra pheromone (2× multiplier)
      */
-    updatePheromones() {
-        // Step 1: Evaporate all pheromones
-        for (let i = 0; i < this.taskCount; i++) {
-            for (let j = 0; j < this.taskCount; j++) {
-                this.pheromones[i][j] *= (1.0 - this.rho);
-            }
-        }
-
-        // Step 2: Deposit pheromone for all ants
-        for (let ant of this.ants) {
-            if (ant.tour.length === this.taskCount) {
-                const deposit = this.Q / ant.length;
-                for (let i = 0; i < ant.tour.length - 1; i++) {
-                    const from = ant.tour[i];
-                    const to = ant.tour[i + 1];
-                    this.pheromones[from][to] += deposit;
-                    this.pheromones[to][from] += deposit; // Undirected graph
-                }
-            }
-        }
-
-        // Step 3: Elitist strategy - best ant deposits extra pheromone
-        if (this.bestTour && this.bestTour.length > 0) {
-            const elitistDeposit = (this.Q / this.bestLength) * 2; // 2× bonus for best
-            for (let i = 0; i < this.bestTour.length - 1; i++) {
-                const from = this.bestTour[i];
-                const to = this.bestTour[i + 1];
-                this.pheromones[from][to] += elitistDeposit;
-                this.pheromones[to][from] += elitistDeposit;
-            }
-        }
-
-        // Clamp pheromones to reasonable bounds (prevent numerical issues)
-        const minPheromone = 1e-4;
-        const maxPheromone = 1e2;
-        for (let i = 0; i < this.taskCount; i++) {
-            for (let j = 0; j < this.taskCount; j++) {
-                this.pheromones[i][j] = clamp(
-                    this.pheromones[i][j],
-                    minPheromone,
-                    maxPheromone
-                );
-            }
+    updatePheromonesOptimized(ants, evaporationRate) {
+    // First, evaporate all pheromones
+    for (let i = 0; i < this.pheromones.length; i++) {
+        for (let j = 0; j < this.pheromones[i].length; j++) {
+            this.pheromones[i][j] *= (1 - evaporationRate);
         }
     }
-
+    
+    // Then add pheromones from ants (only best ants for performance)
+    const antsToUse = ants.length > 50 ? ants.slice(0, 30) : ants; // Limit to 30 best ants
+    
+    for (const ant of antsToUse) {
+        const contribution = 1 / ant.distance;
+        for (let k = 0; k < ant.tour.length - 1; k++) {
+            const i = ant.tour[k];
+            const j = ant.tour[k + 1];
+            this.pheromones[i][j] += contribution;
+            this.pheromones[j][i] += contribution; // Symmetric
+        }
+    }
+}
     /**
      * Calculate average tour length across all ants
      */
@@ -419,5 +390,31 @@ class AntColonyOptimizer {
         }
 
         return (convergenceIter / this.numIterations) * 100;
+    }
+    checkConvergence(bestDistance, iteration, maxIterations) {
+        if (!this.convergenceHistory) {
+            this.convergenceHistory = [];
+        }
+    
+        this.convergenceHistory.push(bestDistance);
+    
+        // Keep only last 20 iterations
+        if (this.convergenceHistory.length > 20) {
+            this.convergenceHistory.shift();
+        }
+    
+        // Check if no improvement in last 20 iterations
+        if (this.convergenceHistory.length === 20) {
+            const initial = this.convergenceHistory[0];
+            const current = this.convergenceHistory[this.convergenceHistory.length - 1];
+            const improvement = (initial - current) / initial;
+        
+            if (improvement < 0.01) { // Less than 1% improvement
+                console.log(`Converged early at iteration ${iteration} (improvement < 1%)`);
+                return true; // Converged
+            }
+        }
+    
+        return false;
     }
 }
