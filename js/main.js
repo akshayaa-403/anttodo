@@ -28,10 +28,16 @@ let appState = {
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🐜 Ant To-Do List starting...');
 
+    // Initialize theme
+    initializeTheme();
+
     // Initialize UI elements
     initializeEventListeners();
     initializeParameterSliders();
     initializeStepThroughControls();
+    
+    // Initialize keyboard shortcuts
+    initializeKeyboardShortcuts();
 
     // Load default example
     loadTasks();
@@ -50,6 +56,109 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /**
+ * Initialize theme support with system preference and manual toggle
+ */
+function initializeTheme() {
+    const savedTheme = localStorage.getItem('theme') || 'auto';
+    
+    if (savedTheme === 'light') {
+        document.body.classList.add('light-theme');
+    } else if (savedTheme === 'dark') {
+        document.body.classList.remove('light-theme');
+    } else {
+        // Auto: respect system preference
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+            document.body.classList.add('light-theme');
+        }
+    }
+    
+    // Listen for system preference changes
+    if (window.matchMedia) {
+        window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', e => {
+            if (localStorage.getItem('theme') === 'auto') {
+                if (e.matches) {
+                    document.body.classList.add('light-theme');
+                } else {
+                    document.body.classList.remove('light-theme');
+                }
+            }
+        });
+    }
+}
+
+/**
+ * Toggle between light and dark themes
+ */
+function toggleTheme() {
+    const isLight = document.body.classList.toggle('light-theme');
+    localStorage.setItem('theme', isLight ? 'light' : 'dark');
+}
+
+/**
+ * Initialize keyboard shortcuts
+ */
+function initializeKeyboardShortcuts() {
+    document.addEventListener('keydown', (e) => {
+        // Ctrl/Cmd + Enter: Optimize
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            e.preventDefault();
+            const optimizeBtn = document.getElementById('optimizeBtn');
+            if (optimizeBtn && !optimizeBtn.disabled) {
+                optimizeBtn.click();
+            }
+        }
+        
+        // Ctrl/Cmd + S: Save list
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+            e.preventDefault();
+            const saveListBtn = document.getElementById('saveListBtn');
+            if (saveListBtn) {
+                saveListBtn.click();
+            }
+        }
+        
+        // Ctrl/Cmd + L: Load list
+        if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
+            e.preventDefault();
+            const loadListDropdown = document.getElementById('loadListDropdown');
+            if (loadListDropdown) {
+                loadListDropdown.focus();
+            }
+        }
+
+        // Ctrl/Cmd + Shift + T: Toggle theme
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'T') {
+            e.preventDefault();
+            const themeToggleBtn = document.getElementById('themeToggleBtn');
+            if (themeToggleBtn) {
+                themeToggleBtn.click();
+            }
+        }
+        
+        // Ctrl/Cmd + Shift + ?: Show help
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === '?') {
+            e.preventDefault();
+            showKeyboardHelp();
+        }
+    });
+}
+
+/**
+ * Show keyboard shortcuts help
+ */
+function showKeyboardHelp() {
+    const helpText = `
+⌨️ Keyboard Shortcuts:
+• Ctrl/Cmd + Enter: Start optimization
+• Ctrl/Cmd + S: Save current task list
+• Ctrl/Cmd + L: Load saved task list
+• Ctrl/Cmd + Shift + T: Toggle theme
+• Ctrl/Cmd + Shift + ?: Show this help
+    `;
+    alert(helpText);
+}
+
+/**
  * Setup all event listeners
  */
 function initializeEventListeners() {
@@ -58,6 +167,7 @@ function initializeEventListeners() {
     const loadExampleBtn = document.getElementById('loadExampleBtn');
     const resetBtn = document.getElementById('resetBtn');
     const toggleAdvancedBtn = document.getElementById('toggleAdvanced');
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
     const saveListBtn = document.getElementById('saveListBtn');
     const loadListDropdown = document.getElementById('loadListDropdown');
     const deleteSavedBtn = document.getElementById('deleteSavedBtn');
@@ -83,6 +193,18 @@ function initializeEventListeners() {
 
     if (toggleAdvancedBtn) {
         toggleAdvancedBtn.addEventListener('click', handleToggleAdvanced);
+    }
+
+    // Theme toggle handler
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener('click', () => {
+            toggleTheme();
+            const isLight = document.body.classList.contains('light-theme');
+            themeToggleBtn.textContent = isLight ? '☀️ Light' : '🌙 Dark';
+        });
+        // Set initial button text
+        const isLight = document.body.classList.contains('light-theme');
+        themeToggleBtn.textContent = isLight ? '☀️ Light' : '🌙 Dark';
     }
 
     // Save/Load list handlers

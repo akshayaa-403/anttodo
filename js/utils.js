@@ -421,6 +421,14 @@ function sanitizeHtml(text) {
 }
 
 /**
+ * Sleep utility - Used for yielding to event loop to prevent UI freeze
+ * Not for artificial delays; for event loop yielding only
+ */
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
  * Save task list to browser localStorage for persistence
  * Creates or overwrites a saved list with current tasks.
  * 
