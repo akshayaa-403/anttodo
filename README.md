@@ -39,10 +39,6 @@ A beautiful, interactive visualization that turns your to-do list into a Traveli
   - Number of iterations completed
 - **Detailed explanation** of how the optimization worked
 
-## Try It Now
-
-**Live Demo:** [https://akshayaa-403.github.io/anttodo/](https://akshayaa-403.github.io/anttodo/)
-
 ### Local Setup
 
 No build process needed!
@@ -79,17 +75,3 @@ Where:
 ## License
 
 This project is licensed under the **MIT License** — see [LICENSE](LICENSE) for details.
-
-## Educational Context
-
-This project demonstrates:
-- **Swarm intelligence** and collective behavior
-- **Metaheuristic optimization** algorithms
-- **Interactive visualization** of algorithms
-- **Real-time canvas rendering** and animations
-- **Responsive web design** principles
-<<<<<<< HEAD
-- **Modern JavaScript** (ES6, async/await, closures)
-=======
-- **Modern JavaScript** (ES6, async/await, closures)
->>>>>>> 04c5173640ebba589121e2d298ef981b2f751f21
