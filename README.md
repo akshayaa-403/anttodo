@@ -88,4 +88,8 @@ This project demonstrates:
 - **Interactive visualization** of algorithms
 - **Real-time canvas rendering** and animations
 - **Responsive web design** principles
+<<<<<<< HEAD
 - **Modern JavaScript** (ES6, async/await, closures)
+=======
+- **Modern JavaScript** (ES6, async/await, closures)
+>>>>>>> 04c5173640ebba589121e2d298ef981b2f751f21
