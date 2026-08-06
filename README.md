@@ -16,11 +16,15 @@ An interactive visualizer that applies **Ant Colony Optimization** to task order
 
 The app ships with two problem formulations that share the same ACO engine. This distinction is the point of the project, so it's worth being precise about it.
 
+<<<<<<< HEAD
 ### 📍 Errand Mode — a literal Traveling Salesman Problem
 
 Tasks are **real places** with latitude and longitude. Distance is genuine haversine kilometres, the heuristic is `η = 1/km`, and the tour is **closed** (it returns home). This is textbook TSP, and the answer is objectively verifiable — a shorter route really is shorter.
 
 ### 🧠 Focus Mode — task sequencing
+=======
+### Local Setup
+>>>>>>> 8997def4ecb66ec8410dfc6524596450f8b05fc6
 
 Here the colony optimizes the **order** of a workday against a cost function built from things that actually matter:
 
@@ -136,4 +140,8 @@ Most importantly, it demonstrates the practice of **choosing an objective functi
 
 ## License
 
+<<<<<<< HEAD
 MIT — see [LICENSE](LICENSE).
+=======
+This project is licensed under the **MIT License** — see [LICENSE](LICENSE) for details.
+>>>>>>> 8997def4ecb66ec8410dfc6524596450f8b05fc6
