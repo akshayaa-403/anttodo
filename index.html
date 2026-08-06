@@ -1,0 +1,1363 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ants Solve Your To-Do List — Ant Colony Optimization</title>
+<meta name="description" content="An interactive Ant Colony Optimization visualizer that finds the best order for your tasks. Watch ants lay pheromone trails and converge on an optimal schedule in real time.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐜</text></svg>">
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2a2f3a;
+    --fg:#e8eaf0; --muted:#9aa3b2; --dim:#6b7484;
+    --accent:#ffb245; --accent2:#4ea1ff; --good:#3ddc97; --bad:#ff6b6b;
+    --ant:#ffd479;
+    --r:10px; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+  }
+  @media(prefers-color-scheme:light){
+    :root{
+      --bg:#f6f7f9; --panel:#fff; --panel2:#f0f2f5; --line:#dfe3ea;
+      --fg:#161a21; --muted:#5a6472; --dim:#8b95a4;
+      --accent:#c2761a; --accent2:#1667c8; --good:#12855c; --bad:#c0392b;
+      --ant:#a8620d;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--fg); font-family:var(--sans);
+    font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{margin:0;font-weight:650;letter-spacing:-.01em}
+  button{font-family:inherit;font-size:inherit;color:inherit;cursor:pointer}
+  input,select{font-family:inherit;font-size:inherit;color:inherit}
+
+  .wrap{max-width:1280px;margin:0 auto;padding:20px}
+
+  /* ---------- header ---------- */
+  header{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;margin-bottom:18px}
+  .brand{display:flex;align-items:center;gap:11px;min-width:0}
+  .brand .logo{font-size:30px;line-height:1}
+  .brand h1{font-size:19px}
+  .brand p{margin:2px 0 0;color:var(--muted);font-size:12.5px}
+
+  .modes{display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);padding:3px;gap:3px}
+  .modes button{
+    background:none;border:0;padding:8px 15px;border-radius:7px;
+    color:var(--muted);font-size:13.5px;font-weight:550;transition:.15s;white-space:nowrap;
+  }
+  .modes button[aria-pressed=true]{background:var(--accent);color:#0f1115}
+  @media(prefers-color-scheme:light){.modes button[aria-pressed=true]{color:#fff}}
+  .modes button:hover:not([aria-pressed=true]){color:var(--fg)}
+
+  /* ---------- layout ---------- */
+  .grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
+  @media(max-width:1000px){.grid{grid-template-columns:1fr}}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+  .card>.hd{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:11px 14px;border-bottom:1px solid var(--line);background:var(--panel2);
+  }
+  .card>.hd h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+  .card>.bd{padding:14px}
+  .stack{display:flex;flex-direction:column;gap:16px}
+
+  /* ---------- viz ---------- */
+  .vizwrap{position:relative;background:var(--bg)}
+  canvas#stage{display:block;width:100%;height:auto}
+  .viztabs{display:flex;gap:3px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:3px}
+  .viztabs button{background:none;border:0;padding:5px 11px;border-radius:6px;font-size:12px;color:var(--muted);font-weight:550}
+  .viztabs button[aria-pressed=true]{background:var(--accent2);color:#fff}
+
+  .hud{
+    position:absolute;left:12px;top:12px;display:flex;flex-direction:column;gap:3px;
+    font-family:var(--mono);font-size:11.5px;color:var(--muted);pointer-events:none;
+    background:color-mix(in srgb,var(--bg) 78%,transparent);padding:7px 10px;border-radius:7px;
+    border:1px solid var(--line);
+  }
+  .hud b{color:var(--fg);font-weight:600}
+  .hud .costv{color:var(--good)}
+
+  /* ---------- controls ---------- */
+  .runbar{display:flex;gap:8px;flex-wrap:wrap}
+  .btn{
+    border:1px solid var(--line);background:var(--panel2);padding:9px 15px;border-radius:8px;
+    font-weight:550;font-size:13.5px;transition:.15s;
+  }
+  .btn:hover{border-color:var(--dim)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#0f1115}
+  @media(prefers-color-scheme:light){.btn.primary{color:#fff}}
+  .btn.primary:hover{filter:brightness(1.08)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn.wide{flex:1;justify-content:center;text-align:center}
+
+  .ctrl{margin-bottom:13px}
+  .ctrl:last-child{margin-bottom:0}
+  .ctrl .lab{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;gap:8px}
+  .ctrl .lab span:first-child{font-size:12.5px;color:var(--muted)}
+  .ctrl .lab code{font-family:var(--mono);font-size:12px;color:var(--accent);font-weight:600}
+  .ctrl .hint{font-size:11px;color:var(--dim);margin-top:4px;line-height:1.35}
+  input[type=range]{width:100%;accent-color:var(--accent);height:18px;margin:0}
+  .ctrl.off{opacity:.4;pointer-events:none}
+
+  /* ---------- tasks ---------- */
+  .tasks{display:flex;flex-direction:column;gap:7px;max-height:340px;overflow-y:auto}
+  .task{
+    display:flex;align-items:center;gap:9px;background:var(--panel2);
+    border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px;
+  }
+  .task .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+  .task .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+  .task .meta{font-family:var(--mono);font-size:10.5px;color:var(--dim);white-space:nowrap}
+  .task .x{background:none;border:0;color:var(--dim);padding:2px 4px;border-radius:4px;line-height:1}
+  .task .x:hover{color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent)}
+
+  .addrow{display:flex;gap:7px;margin-top:10px}
+  .addrow input{
+    flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);
+    border-radius:8px;padding:9px 11px;font-size:13px;
+  }
+  .addrow input:focus{outline:2px solid var(--accent2);outline-offset:-1px}
+
+  /* ---------- results ---------- */
+  .cmp{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:560px){.cmp{grid-template-columns:1fr}}
+  .cmp h3{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:7px}
+  .ord{list-style:none;margin:0;padding:0;counter-reset:o;display:flex;flex-direction:column;gap:4px}
+  .ord li{
+    counter-increment:o;display:flex;align-items:center;gap:8px;font-size:12.5px;
+    background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:6px 9px;
+  }
+  .ord li::before{
+    content:counter(o);font-family:var(--mono);font-size:10px;color:var(--dim);
+    min-width:15px;text-align:right;flex:0 0 auto;
+  }
+  .ord li .dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
+  .ord li .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ord li .clk{font-family:var(--mono);font-size:10.5px;color:var(--dim)}
+  .ord li.late{border-color:color-mix(in srgb,var(--bad) 55%,var(--line))}
+  .ord li.late .clk{color:var(--bad)}
+  .ord.after li{border-color:color-mix(in srgb,var(--good) 30%,var(--line))}
+  .ord.after li.late{border-color:color-mix(in srgb,var(--bad) 55%,var(--line))}
+
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:9px;margin-bottom:14px}
+  .stat{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 11px}
+  .stat .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim)}
+  .stat .v{font-family:var(--mono);font-size:19px;font-weight:600;margin-top:3px}
+  .stat .v.g{color:var(--good)} .stat .v.b{color:var(--bad)}
+
+  .why{margin-top:14px}
+  .why h3{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:8px}
+  .why ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+  .why li{
+    font-size:12.5px;color:var(--muted);padding-left:22px;position:relative;line-height:1.45;
+  }
+  .why li::before{position:absolute;left:0;top:0;font-size:12px}
+  .why li.up::before{content:"▲";color:var(--good)}
+  .why li.dn::before{content:"▼";color:var(--bad)}
+  .why li.eq::before{content:"•";color:var(--dim)}
+  .why li b{color:var(--fg);font-weight:600}
+
+  .empty{color:var(--dim);font-size:13px;text-align:center;padding:26px 12px;line-height:1.5}
+
+  /* ---------- deps ---------- */
+  .deprow{display:flex;gap:7px;align-items:center;margin-bottom:9px}
+  .deprow select{
+    flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);
+    border-radius:7px;padding:7px 9px;font-size:12.5px;
+  }
+  .deprow .ar{color:var(--dim);font-size:12px;flex:0 0 auto}
+  .deplist{display:flex;flex-wrap:wrap;gap:6px}
+  .dep{
+    display:inline-flex;align-items:center;gap:6px;background:var(--panel2);
+    border:1px solid var(--line);border-radius:20px;padding:4px 9px;font-size:11.5px;
+  }
+  .dep button{background:none;border:0;color:var(--dim);padding:0 1px;line-height:1}
+  .dep button:hover{color:var(--bad)}
+  .warn{
+    background:color-mix(in srgb,var(--bad) 12%,transparent);
+    border:1px solid color-mix(in srgb,var(--bad) 45%,transparent);
+    color:var(--bad);border-radius:7px;padding:8px 10px;font-size:12px;margin-top:9px;
+  }
+  .note{font-size:11.5px;color:var(--dim);line-height:1.45}
+
+  footer{margin-top:22px;padding-top:16px;border-top:1px solid var(--line);color:var(--dim);font-size:12px}
+  footer a{color:var(--accent2)}
+  details.math{margin-top:10px}
+  details.math summary{cursor:pointer;font-size:12.5px;color:var(--muted)}
+  details.math .in{margin-top:9px;font-size:12.5px;color:var(--muted);line-height:1.6}
+  details.math code{font-family:var(--mono);font-size:11.5px;background:var(--panel2);padding:1px 5px;border-radius:4px}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="brand">
+    <div class="logo" aria-hidden="true">🐜</div>
+    <div>
+      <h1>Ants Solve Your To-Do List</h1>
+      <p>Ant Colony Optimization, running live in your browser</p>
+    </div>
+  </div>
+  <div class="modes" role="group" aria-label="Optimization mode">
+    <button id="mErrand" aria-pressed="false">📍 Errand Mode · true TSP</button>
+    <button id="mFocus"  aria-pressed="true">🧠 Focus Mode · sequencing</button>
+  </div>
+</header>
+
+<div class="grid">
+  <!-- ================= LEFT ================= -->
+  <div class="stack">
+
+    <div class="card">
+      <div class="hd">
+        <h2 id="vizTitle">Colony</h2>
+        <div class="viztabs" role="group" aria-label="Visualization">
+          <button id="vAnts" aria-pressed="true">Ants</button>
+          <button id="vPhero" aria-pressed="false">Pheromone</button>
+          <button id="vBoth" aria-pressed="false">Both</button>
+        </div>
+      </div>
+      <div class="vizwrap">
+        <canvas id="stage" width="1600" height="900" role="img"
+                aria-label="Animated view of ants exploring task orderings"></canvas>
+        <div class="hud">
+          <div>iter <b id="hIter">0</b> / <b id="hIters">100</b></div>
+          <div>best <b class="costv" id="hCost">—</b></div>
+          <div id="hUnitRow">unit <b id="hUnit">—</b></div>
+        </div>
+      </div>
+      <div class="bd">
+        <div class="runbar">
+          <button class="btn primary" id="bRun">▶ Run colony</button>
+          <button class="btn" id="bStep">Step</button>
+          <button class="btn" id="bReset">Reset</button>
+          <button class="btn" id="bShuffle">Shuffle tasks</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="hd"><h2>Convergence</h2><span class="note" id="convNote">best cost per iteration</span></div>
+      <div class="bd" style="padding:10px 14px 14px">
+        <canvas id="chart" width="1600" height="420" style="display:block;width:100%;height:auto"
+                role="img" aria-label="Line chart of best cost over iterations"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="hd"><h2>Before &amp; After</h2><span class="note" id="resNote"></span></div>
+      <div class="bd" id="results">
+        <div class="empty">Run the colony to compare your original order against the optimized one.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= RIGHT ================= -->
+  <div class="stack">
+
+    <div class="card">
+      <div class="hd"><h2>Tasks</h2><span class="note" id="taskCount">0</span></div>
+      <div class="bd">
+        <div class="tasks" id="taskList"></div>
+        <div class="addrow">
+          <input id="newTask" placeholder="Add a task…" aria-label="New task name" maxlength="60">
+          <button class="btn" id="bAdd">Add</button>
+        </div>
+        <div class="runbar" style="margin-top:9px">
+          <button class="btn wide" id="bSample">Load sample day</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="depCard">
+      <div class="hd"><h2>Dependencies</h2><span class="note" id="depNote"></span></div>
+      <div class="bd">
+        <div class="deprow">
+          <select id="depA" aria-label="Predecessor task"></select>
+          <span class="ar">must precede</span>
+          <select id="depB" aria-label="Successor task"></select>
+        </div>
+        <button class="btn wide" id="bDep" style="width:100%">+ Add constraint</button>
+        <div id="depWarn"></div>
+        <div class="deplist" id="depList" style="margin-top:10px"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="hd"><h2>Colony parameters</h2></div>
+      <div class="bd">
+        <div class="ctrl">
+          <div class="lab"><span>Ants per iteration</span><code id="lAnts">20</code></div>
+          <input type="range" id="sAnts" min="4" max="120" step="1" value="20">
+          <div class="hint">More ants explore more orderings each round.</div>
+        </div>
+        <div class="ctrl">
+          <div class="lab"><span>Iterations</span><code id="lIters">100</code></div>
+          <input type="range" id="sIters" min="10" max="400" step="5" value="100">
+          <div class="hint">How long the colony gets to converge.</div>
+        </div>
+        <div class="ctrl">
+          <div class="lab"><span>α · pheromone weight</span><code id="lAlpha">1.0</code></div>
+          <input type="range" id="sAlpha" min="0" max="5" step="0.1" value="1">
+          <div class="hint">How much ants trust trails left by others.</div>
+        </div>
+        <div class="ctrl">
+          <div class="lab"><span>β · heuristic weight</span><code id="lBeta">3.0</code></div>
+          <input type="range" id="sBeta" min="0" max="8" step="0.1" value="3">
+          <div class="hint">How much ants favour the locally cheapest next task.</div>
+        </div>
+        <div class="ctrl">
+          <div class="lab"><span>ρ · evaporation</span><code id="lRho">0.10</code></div>
+          <input type="range" id="sRho" min="0.01" max="0.9" step="0.01" value="0.1">
+          <div class="hint">How fast old trails fade. High ρ = forgets faster.</div>
+        </div>
+        <div class="ctrl">
+          <div class="lab"><span>q₀ · greediness</span><code id="lQ0">0.10</code></div>
+          <input type="range" id="sQ0" min="0" max="1" step="0.01" value="0.1">
+          <div class="hint">Chance an ant takes the best-looking edge outright.</div>
+        </div>
+        <div class="ctrl">
+          <div class="lab"><span>Speed</span><code id="lSpeed">fast</code></div>
+          <input type="range" id="sSpeed" min="0" max="3" step="1" value="2">
+          <div class="hint">Iterations drawn per animation frame.</div>
+        </div>
+        <div class="ctrl">
+          <div class="lab"><span>2-opt local search</span><code id="lLS">on</code></div>
+          <input type="range" id="sLS" min="0" max="1" step="1" value="1">
+          <div class="hint">Polishes each ant's route. Much better results, a bit slower.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="weightCard">
+      <div class="hd"><h2>What matters to you</h2></div>
+      <div class="bd">
+        <div class="ctrl">
+          <div class="lab"><span>Hitting deadlines</span><code id="lWd">1.0</code></div>
+          <input type="range" id="sWd" min="0" max="3" step="0.1" value="1">
+        </div>
+        <div class="ctrl">
+          <div class="lab"><span>Urgent work first</span><code id="lWp">1.0</code></div>
+          <input type="range" id="sWp" min="0" max="3" step="0.1" value="1">
+        </div>
+        <div class="ctrl">
+          <div class="lab"><span>Avoiding context switches</span><code id="lWc">1.0</code></div>
+          <input type="range" id="sWc" min="0" max="3" step="0.1" value="1">
+        </div>
+        <div class="ctrl">
+          <div class="lab"><span>Hard work while fresh</span><code id="lWe">1.0</code></div>
+          <input type="range" id="sWe" min="0" max="3" step="0.1" value="1">
+        </div>
+        <div class="note" style="margin-top:4px">These are the objective's weights. Set one to 0 to ignore it entirely.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div id="modeBlurb"></div>
+  <details class="math">
+    <summary>How the algorithm works</summary>
+    <div class="in">
+      <p>Each ant builds one complete ordering, choosing the next task with probability</p>
+      <p style="text-align:center"><code>P(i→j) = τ(i,j)^α · η(i,j)^β / Σ τ(i,l)^α · η(i,l)^β</code></p>
+      <p><code>τ</code> is pheromone deposited by previous ants; <code>η</code> is the heuristic
+      (<code>1/cost</code> of stepping from <em>i</em> to <em>j</em>). After every iteration all trails
+      evaporate by <code>ρ</code>, then the best-so-far ordering deposits <code>1/cost</code> on its edges.
+      Good edges compound; bad ones fade.</p>
+      <p>This is a <strong>Max-Min Ant System</strong>: pheromone is clamped to
+      <code>[τmin, τmax]</code> so no single trail can dominate and stall the search — the classic failure
+      mode of naive ACO. Each ant's ordering is then polished with dependency-aware <strong>2-opt</strong>
+      segment reversal.</p>
+      <p><strong>Errand Mode</strong> is a literal Traveling Salesman Problem: tasks are places,
+      <code>η = 1/km</code> using haversine distance, and the tour returns home.
+      <strong>Focus Mode</strong> applies the same colony to task <em>sequencing</em>, where cost is a
+      weighted sum of deadline misses, priority inversion, context switching and cognitive-load timing.
+      Dependencies apply to Focus Mode only — a closed TSP tour has no start, so "before" is undefined there.</p>
+    </div>
+  </details>
+  <p style="margin:12px 0 0">
+    Built with vanilla JS and canvas — no build step, no dependencies.
+    <a href="https://github.com/akshayaa-403/anttodo">Source on GitHub</a>
+  </p>
+</footer>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   Ants Solve Your To-Do List
+   Single-file ACO visualizer. Engine mirrors the headless
+   test suite (30/30) in scratchpad/test-aco.js.
+   ============================================================ */
+
+/* ---------------- utilities ---------------- */
+const $ = (id) => document.getElementById(id);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const fmtHM = (m) => {
+  m = Math.round(m);
+  const h = Math.floor(m / 60) % 24, mm = m % 60;
+  return String(h).padStart(2, "0") + ":" + String(mm).padStart(2, "0");
+};
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const CATS = {
+  work:     { label: "work",     color: "#4ea1ff" },
+  errands:  { label: "errands",  color: "#ffb245" },
+  home:     { label: "home",     color: "#3ddc97" },
+  health:   { label: "health",   color: "#ff6b6b" },
+  social:   { label: "social",   color: "#c792ea" },
+  admin:    { label: "admin",    color: "#7fdbca" },
+};
+const catColor = (c) => (CATS[c] || { color: "#8b95a4" }).color;
+
+/* ---------------- sample data ---------------- */
+function sampleFocus() {
+  const T = (name, category, duration, priority, load, due) =>
+    ({ name, category, duration, priority, load, due });
+  return [
+    T("Finish quarterly report", "work",    90, 10, 9, 17 * 60),
+    T("Reply to client emails",  "work",    30,  7, 4, 12 * 60),
+    T("Team standup",            "work",    15,  6, 3, 10 * 60),
+    T("Code review for Priya",   "work",    45,  8, 8, 15 * 60),
+    T("Gym session",             "health",  60,  4, 2, null),
+    T("Grocery run",             "errands", 40,  5, 2, null),
+    T("Pay electricity bill",    "admin",   10,  9, 2, 16 * 60),
+    T("Meal prep for the week",  "home",    50,  3, 3, null),
+    T("Call Mum",                "social",  25,  6, 1, null),
+    T("Plan sprint backlog",     "work",    40,  7, 8, null),
+  ];
+}
+function sampleErrand() {
+  // Bengaluru-ish spread, so haversine distances are realistic.
+  const P = (name, category, lat, lon, duration) =>
+    ({ name, category, lat, lon, duration, priority: 5, load: 3, due: null });
+  return [
+    P("Post office",       "errands", 12.9716, 77.5946, 15),
+    P("Farmers market",    "errands", 12.9784, 77.6408, 30),
+    P("Hardware store",    "errands", 12.9352, 77.6245, 20),
+    P("Pharmacy",          "health",  12.9611, 77.6387, 10),
+    P("Bank branch",       "admin",   12.9250, 77.5938, 25),
+    P("Dry cleaner",       "errands", 12.9899, 77.5730, 10),
+    P("Bookshop",          "social",  12.9550, 77.6100, 20),
+    P("Petrol station",    "errands", 12.9420, 77.5750, 10),
+  ];
+}
+
+/* ---------------- dependency helpers ---------------- */
+function buildPredMap(n, deps) {
+  const pred = Array.from({ length: n }, () => new Set());
+  for (const [p, s] of deps)
+    if (p >= 0 && p < n && s >= 0 && s < n && p !== s) pred[s].add(p);
+  return pred;
+}
+function topoOrder(n, deps) {
+  const pred = buildPredMap(n, deps);
+  const indeg = pred.map((s) => s.size);
+  const succ = Array.from({ length: n }, () => []);
+  for (let s = 0; s < n; s++) for (const p of pred[s]) succ[p].push(s);
+  const q = [];
+  for (let i = 0; i < n; i++) if (indeg[i] === 0) q.push(i);
+  const out = [];
+  while (q.length) {
+    const v = q.shift();
+    out.push(v);
+    for (const w of succ[v]) if (--indeg[w] === 0) q.push(w);
+  }
+  return out.length === n ? out : null;
+}
+const hasCycle = (n, deps) => topoOrder(n, deps) === null;
+
+/* ---------------- cost models ---------------- */
+function haversine(a, b) {
+  const R = 6371, toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat), dLon = toRad(b.lon - a.lon);
+  const la1 = toRad(a.lat), la2 = toRad(b.lat);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+function makeErrandModel(tasks) {
+  const n = tasks.length;
+  const D = Array.from({ length: n }, () => new Float64Array(n));
+  for (let i = 0; i < n; i++)
+    for (let j = 0; j < n; j++) D[i][j] = i === j ? 0 : haversine(tasks[i], tasks[j]);
+  return {
+    kind: "errand", dist: D, closed: true, unit: "km",
+    cost(seq) {
+      if (seq.length < 2) return 0;
+      let t = 0;
+      for (let i = 0; i < seq.length - 1; i++) t += D[seq[i]][seq[i + 1]];
+      return t + D[seq[seq.length - 1]][seq[0]];
+    },
+    breakdown(seq) { return { travel: this.cost(seq) }; },
+  };
+}
+function makeFocusModel(tasks, weights, dayStart = 9 * 60, dayLen = 8 * 60) {
+  const n = tasks.length;
+  const D = Array.from({ length: n }, () => new Float64Array(n));
+  for (let i = 0; i < n; i++)
+    for (let j = 0; j < n; j++)
+      D[i][j] = i === j ? 0 : tasks[i].category === tasks[j].category ? 0 : 1;
+
+  function parts(seq) {
+    let clock = dayStart;
+    const p = { deadline: 0, priority: 0, context: 0, energy: 0 };
+    for (let k = 0; k < seq.length; k++) {
+      const t = tasks[seq[k]], dur = t.duration ?? 30, finish = clock + dur;
+      if (t.due != null && finish > t.due) p.deadline += ((finish - t.due) / 60) * t.priority;
+      const pr = seq.length > 1 ? k / (seq.length - 1) : 0;
+      p.priority += t.priority * pr;
+      if (k > 0) p.context += D[seq[k - 1]][seq[k]] * 2;
+      const mid = clock + dur / 2;
+      p.energy += t.load * clamp((mid - dayStart) / dayLen, 0, 1);
+      clock = finish;
+    }
+    return p;
+  }
+  return {
+    kind: "focus", dist: D, closed: false, unit: "penalty", dayStart, dayLen,
+    cost(seq) {
+      const p = parts(seq);
+      return weights.deadline * p.deadline + weights.priority * p.priority
+           + weights.context * p.context + weights.energy * p.energy;
+    },
+    breakdown: parts,
+    schedule(seq) {
+      let clock = dayStart;
+      return seq.map((i) => {
+        const t = tasks[i], start = clock, end = clock + (t.duration ?? 30);
+        clock = end;
+        return { idx: i, start, end, late: t.due != null && end > t.due };
+      });
+    },
+  };
+}
+
+/* ---------------- ACO ---------------- */
+class ACO {
+  constructor(cfg) {
+    Object.assign(this, {
+      nAnts: 20, alpha: 1, beta: 3, rho: 0.1, q0: 0.1, seed: 12345,
+      useLocalSearch: true, deps: [],
+    }, cfg);
+    // Coerce numerics: a NaN here would silently produce zero ants and no
+    // solution at all, which is far harder to notice than a wrong value.
+    const num = (v, d) => (isFinite(+v) ? +v : d);
+    this.n = Math.max(0, num(this.n, 0) | 0);
+    this.nAnts = Math.max(1, num(this.nAnts, 20) | 0);
+    this.alpha = num(this.alpha, 1);
+    this.beta = num(this.beta, 3);
+    this.rho = Math.min(1, Math.max(0.001, num(this.rho, 0.1)));
+    this.q0 = Math.min(1, Math.max(0, num(this.q0, 0.1)));
+    const n = this.n;
+    this.rand = mulberry32(this.seed);
+    this.pred = buildPredMap(n, this.deps);
+
+    this.eta = Array.from({ length: n }, () => new Float64Array(n));
+    let maxD = 0;
+    for (let i = 0; i < n; i++)
+      for (let j = 0; j < n; j++) if (i !== j) maxD = Math.max(maxD, this.model.dist[i][j]);
+    const scale = maxD > 0 ? maxD : 1;
+    for (let i = 0; i < n; i++)
+      for (let j = 0; j < n; j++)
+        this.eta[i][j] = i === j ? 0 : 1 / (this.model.dist[i][j] / scale + 0.1);
+
+    this.tauMax = 1;
+    this.tauMin = 1 / (2 * Math.max(1, n));
+    this.tau = Array.from({ length: n }, () => new Float64Array(n).fill(this.tauMax));
+    this.best = null; this.bestCost = Infinity;
+    this.iteration = 0; this.history = []; this.lastAnts = [];
+  }
+  feasible(visited, count) {
+    const out = [];
+    for (let i = 0; i < this.n; i++) {
+      if (visited[i]) continue;
+      let ok = true;
+      for (const p of this.pred[i]) if (!visited[p]) { ok = false; break; }
+      if (ok) out.push(i);
+    }
+    if (!out.length && count < this.n)
+      for (let i = 0; i < this.n; i++) if (!visited[i]) out.push(i);
+    return out;
+  }
+  buildOne() {
+    const n = this.n;
+    if (n === 0) return [];
+    const visited = new Uint8Array(n), seq = [];
+    let cand = this.feasible(visited, 0);
+    let cur = cand[Math.floor(this.rand() * cand.length)];
+    seq.push(cur); visited[cur] = 1;
+    while (seq.length < n) {
+      cand = this.feasible(visited, seq.length);
+      if (!cand.length) break;
+      let next;
+      if (this.rand() < this.q0) {
+        let bi = cand[0], bv = -Infinity;
+        for (const j of cand) {
+          const v = Math.pow(this.tau[cur][j], this.alpha) * Math.pow(this.eta[cur][j], this.beta);
+          if (v > bv) { bv = v; bi = j; }
+        }
+        next = bi;
+      } else {
+        let sum = 0; const w = new Float64Array(cand.length);
+        for (let k = 0; k < cand.length; k++) {
+          const v = Math.pow(this.tau[cur][cand[k]], this.alpha) * Math.pow(this.eta[cur][cand[k]], this.beta);
+          w[k] = v; sum += v;
+        }
+        if (!(sum > 0) || !isFinite(sum)) next = cand[Math.floor(this.rand() * cand.length)];
+        else {
+          let r = this.rand() * sum, acc = 0; next = cand[cand.length - 1];
+          for (let k = 0; k < cand.length; k++) { acc += w[k]; if (r <= acc) { next = cand[k]; break; } }
+        }
+      }
+      seq.push(next); visited[next] = 1; cur = next;
+    }
+    return seq;
+  }
+  validOrder(seq) {
+    const seen = new Uint8Array(this.n);
+    for (const t of seq) {
+      for (const p of this.pred[t]) if (!seen[p]) return false;
+      seen[t] = 1;
+    }
+    return true;
+  }
+  localSearch(seq) {
+    const hasDeps = this.deps.length > 0;
+    let best = seq.slice(), bc = this.model.cost(best), improved = true, guard = 0;
+    while (improved && guard++ < 40) {
+      improved = false;
+      for (let i = 0; i < best.length - 1 && !improved; i++)
+        for (let k = i + 1; k < best.length && !improved; k++) {
+          const cand = best.slice(0, i).concat(best.slice(i, k + 1).reverse(), best.slice(k + 1));
+          if (hasDeps && !this.validOrder(cand)) continue;
+          const cc = this.model.cost(cand);
+          if (cc < bc - 1e-12) { best = cand; bc = cc; improved = true; }
+        }
+    }
+    return best;
+  }
+  step() {
+    if (this.n === 0) { this.iteration++; this.history.push(0); return; }
+    const ants = [];
+    let ibSeq = null, ibCost = Infinity;
+    for (let a = 0; a < this.nAnts; a++) {
+      let seq = this.buildOne();
+      if (this.useLocalSearch) seq = this.localSearch(seq);
+      const c = this.model.cost(seq);
+      ants.push({ seq, cost: c });
+      if (c < ibCost) { ibCost = c; ibSeq = seq; }
+    }
+    if (ibCost < this.bestCost) {
+      this.bestCost = ibCost; this.best = ibSeq.slice();
+      this.tauMax = 1 / (this.rho * (this.bestCost + 1e-9));
+      this.tauMin = this.tauMax / (2 * Math.max(1, this.n));
+    }
+    for (let i = 0; i < this.n; i++)
+      for (let j = 0; j < this.n; j++) if (i !== j) this.tau[i][j] *= 1 - this.rho;
+    const dep = this.best;
+    if (dep && dep.length > 1) {
+      const amt = 1 / (this.bestCost + 1e-9);
+      for (let k = 0; k < dep.length - 1; k++) this.tau[dep[k]][dep[k + 1]] += amt;
+      if (this.model.closed) this.tau[dep[dep.length - 1]][dep[0]] += amt;
+    }
+    for (let i = 0; i < this.n; i++)
+      for (let j = 0; j < this.n; j++) {
+        if (i === j) continue;
+        if (this.tau[i][j] > this.tauMax) this.tau[i][j] = this.tauMax;
+        else if (this.tau[i][j] < this.tauMin) this.tau[i][j] = this.tauMin;
+      }
+    this.lastAnts = ants; this.iteration++; this.history.push(this.bestCost);
+  }
+}
+
+/* ============================================================
+   APP STATE
+   ============================================================ */
+const S = {
+  mode: "focus",
+  view: "ants",
+  tasks: sampleFocus(),
+  deps: [],
+  original: null,      // index order as entered
+  aco: null,
+  model: null,
+  running: false,
+  raf: null,
+  layout: [],          // {x,y} per task, canvas coords
+  params: { nAnts: 20, iters: 100, alpha: 1, beta: 3, rho: 0.1, q0: 0.1, speed: 2, ls: 1 },
+  weights: { deadline: 1, priority: 1, context: 1, energy: 1 },
+  antAnim: [],
+};
+
+/* ---------------- layout ---------------- */
+const stage = $("stage"), ctx = stage.getContext("2d");
+const chart = $("chart"), cctx = chart.getContext("2d");
+
+function computeLayout() {
+  const n = S.tasks.length;
+  const W = stage.width, H = stage.height;
+  const pad = 90;
+  S.layout = [];
+  if (n === 0) return;
+
+  if (S.mode === "errand") {
+    // project lat/lon to canvas, preserving aspect
+    const lats = S.tasks.map((t) => t.lat), lons = S.tasks.map((t) => t.lon);
+    const minLa = Math.min(...lats), maxLa = Math.max(...lats);
+    const minLo = Math.min(...lons), maxLo = Math.max(...lons);
+    const spanLa = Math.max(1e-6, maxLa - minLa), spanLo = Math.max(1e-6, maxLo - minLo);
+    const sc = Math.min((W - pad * 2) / spanLo, (H - pad * 2) / spanLa);
+    const ox = (W - spanLo * sc) / 2, oy = (H - spanLa * sc) / 2;
+    for (const t of S.tasks)
+      S.layout.push({ x: ox + (t.lon - minLo) * sc, y: oy + (maxLa - t.lat) * sc });
+  } else {
+    // circle: neutral, no fake geometry implied
+    const cx = W / 2, cy = H / 2, R = Math.min(W, H) / 2 - pad;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 - Math.PI / 2;
+      S.layout.push({ x: cx + Math.cos(a) * R, y: cy + Math.sin(a) * R });
+    }
+  }
+}
+
+/* ---------------- engine lifecycle ---------------- */
+function buildModel() {
+  S.model = S.mode === "errand"
+    ? makeErrandModel(S.tasks)
+    : makeFocusModel(S.tasks, S.weights);
+}
+function resetEngine(keepOriginal) {
+  stopRun();
+  buildModel();
+  computeLayout();
+  if (!keepOriginal || !S.original || S.original.length !== S.tasks.length)
+    S.original = S.tasks.map((_, i) => i);
+  const deps = S.mode === "focus" ? S.deps : [];
+  S.aco = new ACO({
+    n: S.tasks.length, model: S.model, deps,
+    nAnts: S.params.nAnts, alpha: S.params.alpha, beta: S.params.beta,
+    rho: S.params.rho, q0: S.params.q0, seed: 1337,
+    useLocalSearch: !!S.params.ls,
+  });
+  S.antAnim = [];
+  $("hIter").textContent = "0";
+  $("hCost").textContent = "—";
+  drawStage(); drawChart(); renderResults();
+}
+
+/* ---------------- run loop ---------------- */
+function stopRun() {
+  S.running = false;
+  if (S.raf) cancelAnimationFrame(S.raf);
+  S.raf = null;
+  $("bRun").textContent = "▶ Run colony";
+}
+function tick() {
+  if (!S.running) return;
+  const per = [1, 1, 2, 4][S.params.speed];
+  for (let k = 0; k < per; k++) {
+    if (S.aco.iteration >= S.params.iters) { stopRun(); break; }
+    S.aco.step();
+    seedAntAnim();
+  }
+  updateHud(); drawStage(); drawChart(); renderResults();
+  if (S.aco.iteration >= S.params.iters) { stopRun(); return; }
+  if (S.params.speed === 0) S.raf = setTimeout(() => { S.raf = requestAnimationFrame(tick); }, 220);
+  else S.raf = requestAnimationFrame(tick);
+}
+function seedAntAnim() {
+  // sample a few ants from the latest iteration for the crawl animation
+  const ants = S.aco.lastAnts || [];
+  if (!ants.length) { S.antAnim = []; return; }
+  const take = Math.min(9, ants.length);
+  const stepSize = Math.max(1, Math.floor(ants.length / take));
+  S.antAnim = [];
+  for (let i = 0; i < ants.length && S.antAnim.length < take; i += stepSize)
+    S.antAnim.push({ seq: ants[i].seq, t: Math.random() });
+}
+function updateHud() {
+  $("hIter").textContent = String(S.aco.iteration);
+  $("hCost").textContent = isFinite(S.aco.bestCost) ? fmtCost(S.aco.bestCost) : "—";
+}
+function fmtCost(c) {
+  return S.mode === "errand" ? c.toFixed(2) : c.toFixed(1);
+}
+
+/* ============================================================
+   CANVAS: colony
+   ============================================================ */
+function css(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+function drawStage() {
+  const W = stage.width, H = stage.height;
+  ctx.clearRect(0, 0, W, H);
+  const n = S.tasks.length;
+  if (!n) {
+    ctx.fillStyle = css("--dim"); ctx.font = "500 26px system-ui"; ctx.textAlign = "center";
+    ctx.fillText("Add some tasks to begin", W / 2, H / 2);
+    return;
+  }
+  const showP = S.view === "phero" || S.view === "both";
+  const showA = S.view === "ants" || S.view === "both";
+
+  if (showP) drawPheromone();
+  if (S.aco.best) drawBestPath();
+  if (showA) drawAnts();
+  drawNodes();
+}
+
+function drawPheromone() {
+  const { tau, tauMin, tauMax, n } = S.aco;
+  const span = Math.max(1e-12, tauMax - tauMin);
+  ctx.lineCap = "round";
+  for (let i = 0; i < n; i++)
+    for (let j = i + 1; j < n; j++) {
+      // undirected display: strongest of the two directions
+      const v = Math.max(tau[i][j], tau[j][i]);
+      const s = clamp((v - tauMin) / span, 0, 1);
+      if (s < 0.04) continue;
+      const a = S.layout[i], b = S.layout[j];
+      ctx.strokeStyle = `rgba(255,178,69,${(0.06 + s * 0.55).toFixed(3)})`;
+      ctx.lineWidth = 1 + s * 11;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+}
+
+function drawBestPath() {
+  const seq = S.aco.best;
+  if (!seq || seq.length < 2) return;
+  ctx.save();
+  ctx.strokeStyle = css("--good");
+  ctx.lineWidth = 3.5; ctx.lineJoin = "round"; ctx.lineCap = "round";
+  ctx.globalAlpha = 0.92;
+  ctx.beginPath();
+  ctx.moveTo(S.layout[seq[0]].x, S.layout[seq[0]].y);
+  for (let k = 1; k < seq.length; k++) ctx.lineTo(S.layout[seq[k]].x, S.layout[seq[k]].y);
+  if (S.model.closed) ctx.closePath();
+  ctx.stroke();
+
+  // direction arrows along the best path
+  ctx.fillStyle = css("--good"); ctx.globalAlpha = 0.75;
+  const lim = S.model.closed ? seq.length : seq.length - 1;
+  for (let k = 0; k < lim; k++) {
+    const a = S.layout[seq[k]], b = S.layout[seq[(k + 1) % seq.length]];
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    const ang = Math.atan2(b.y - a.y, b.x - a.x);
+    ctx.save(); ctx.translate(mx, my); ctx.rotate(ang);
+    ctx.beginPath(); ctx.moveTo(9, 0); ctx.lineTo(-6, 5.5); ctx.lineTo(-6, -5.5);
+    ctx.closePath(); ctx.fill(); ctx.restore();
+  }
+  ctx.restore();
+}
+
+function drawAnts() {
+  const t0 = performance.now() / 1000;
+  ctx.save();
+  for (let ai = 0; ai < S.antAnim.length; ai++) {
+    const A = S.antAnim[ai], seq = A.seq;
+    if (!seq || seq.length < 2) continue;
+    const legs = S.model.closed ? seq.length : seq.length - 1;
+    const prog = ((t0 * 0.55 + A.t) % 1) * legs;
+    const leg = Math.floor(prog), f = prog - leg;
+    const a = S.layout[seq[leg % seq.length]], b = S.layout[seq[(leg + 1) % seq.length]];
+    if (!a || !b) continue;
+    const x = a.x + (b.x - a.x) * f, y = a.y + (b.y - a.y) * f;
+    const ang = Math.atan2(b.y - a.y, b.x - a.x);
+
+    // faint trace of this ant's current leg
+    ctx.strokeStyle = "rgba(255,212,121,.22)"; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(x, y); ctx.stroke();
+
+    ctx.save();
+    ctx.translate(x, y); ctx.rotate(ang);
+    ctx.fillStyle = css("--ant");
+    // 3-segment ant body
+    ctx.beginPath(); ctx.ellipse(-6, 0, 4.2, 3.1, 0, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, 0, 3.1, 2.5, 0, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(5.2, 0, 2.9, 2.4, 0, 0, 7); ctx.fill();
+    ctx.strokeStyle = css("--ant"); ctx.lineWidth = 1.1;
+    for (const s of [-1, 1]) {
+      ctx.beginPath(); ctx.moveTo(-1, 0); ctx.lineTo(-4, 5.6 * s); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(1, 0);  ctx.lineTo(3, 5.6 * s);  ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(6.6, 0); ctx.lineTo(9.6, 3.4 * s); ctx.stroke(); // antennae
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function drawNodes() {
+  const seq = S.aco.best;
+  const pos = {};
+  if (seq) seq.forEach((t, i) => (pos[t] = i));
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  for (let i = 0; i < S.tasks.length; i++) {
+    const p = S.layout[i], t = S.tasks[i];
+    const r = 15;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r + 4, 0, 7);
+    ctx.fillStyle = css("--bg"); ctx.fill();
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 7);
+    ctx.fillStyle = catColor(t.category); ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = css("--bg"); ctx.stroke();
+
+    if (seq && pos[i] !== undefined) {
+      ctx.fillStyle = "#0f1115"; ctx.font = "700 15px " + "ui-monospace,monospace";
+      ctx.fillText(String(pos[i] + 1), p.x, p.y + 0.5);
+    }
+    // label, pushed outward from centre
+    const cx = stage.width / 2, cy = stage.height / 2;
+    const dx = p.x - cx, dy = p.y - cy;
+    const L = Math.hypot(dx, dy) || 1;
+    const lx = p.x + (dx / L) * 30, ly = p.y + (dy / L) * 30;
+    ctx.font = "500 15px system-ui";
+    ctx.fillStyle = css("--muted");
+    const nm = t.name.length > 22 ? t.name.slice(0, 21) + "…" : t.name;
+    ctx.textAlign = dx > 12 ? "left" : dx < -12 ? "right" : "center";
+    ctx.fillText(nm, lx, ly);
+  }
+}
+
+/* ============================================================
+   CANVAS: convergence chart
+   ============================================================ */
+function drawChart() {
+  const W = chart.width, H = chart.height, pad = 44;
+  cctx.clearRect(0, 0, W, H);
+  const h = S.aco ? S.aco.history.filter(isFinite) : [];
+
+  cctx.strokeStyle = css("--line"); cctx.lineWidth = 1.5;
+  cctx.beginPath();
+  cctx.moveTo(pad, 10); cctx.lineTo(pad, H - pad); cctx.lineTo(W - 14, H - pad);
+  cctx.stroke();
+
+  if (h.length < 2) {
+    cctx.fillStyle = css("--dim"); cctx.font = "500 20px system-ui"; cctx.textAlign = "center";
+    cctx.fillText("Run the colony to see it converge", W / 2, H / 2);
+    return;
+  }
+  const maxV = Math.max(...h), minV = Math.min(...h);
+  const span = Math.max(1e-9, maxV - minV);
+  const total = Math.max(h.length, 2);
+  const X = (i) => pad + (i / (total - 1)) * (W - pad - 14);
+  const Y = (v) => 10 + (1 - (v - minV) / span) * (H - pad - 10);
+
+  // gridlines + y labels
+  cctx.font = "500 15px ui-monospace,monospace"; cctx.textAlign = "right";
+  for (let g = 0; g <= 3; g++) {
+    const v = minV + (span * g) / 3, y = Y(v);
+    cctx.strokeStyle = css("--line"); cctx.globalAlpha = 0.5;
+    cctx.beginPath(); cctx.moveTo(pad, y); cctx.lineTo(W - 14, y); cctx.stroke();
+    cctx.globalAlpha = 1; cctx.fillStyle = css("--dim");
+    cctx.fillText(fmtCost(v), pad - 7, y + 5);
+  }
+  // area + line
+  const grad = cctx.createLinearGradient(0, 10, 0, H - pad);
+  grad.addColorStop(0, "rgba(61,220,151,.28)");
+  grad.addColorStop(1, "rgba(61,220,151,0)");
+  cctx.beginPath();
+  cctx.moveTo(X(0), Y(h[0]));
+  for (let i = 1; i < h.length; i++) cctx.lineTo(X(i), Y(h[i]));
+  cctx.lineTo(X(h.length - 1), H - pad); cctx.lineTo(X(0), H - pad); cctx.closePath();
+  cctx.fillStyle = grad; cctx.fill();
+
+  cctx.beginPath();
+  cctx.moveTo(X(0), Y(h[0]));
+  for (let i = 1; i < h.length; i++) cctx.lineTo(X(i), Y(h[i]));
+  cctx.strokeStyle = css("--good"); cctx.lineWidth = 3;
+  cctx.lineJoin = "round"; cctx.stroke();
+
+  // head marker
+  const lx = X(h.length - 1), ly = Y(h[h.length - 1]);
+  cctx.beginPath(); cctx.arc(lx, ly, 5.5, 0, 7);
+  cctx.fillStyle = css("--good"); cctx.fill();
+
+  cctx.fillStyle = css("--dim"); cctx.textAlign = "left"; cctx.font = "500 15px ui-monospace,monospace";
+  cctx.fillText("iteration →", pad + 2, H - pad + 26);
+  cctx.textAlign = "right";
+  cctx.fillText(String(h.length), W - 14, H - pad + 26);
+}
+
+/* ============================================================
+   RESULTS: before/after + reasoning
+   ============================================================ */
+function renderResults() {
+  const box = $("results");
+  if (!S.aco || !S.aco.best) {
+    box.innerHTML = '<div class="empty">Run the colony to compare your original order against the optimized one.</div>';
+    $("resNote").textContent = "";
+    return;
+  }
+  const before = S.original, after = S.aco.best;
+  const cB = S.model.cost(before), cA = S.model.cost(after);
+  const improvePct = cB > 0 ? ((cB - cA) / cB) * 100 : 0;
+
+  const unit = S.mode === "errand" ? "km" : "pts";
+  $("resNote").textContent = `${S.tasks.length} tasks · cost in ${unit}`;
+
+  /* --- stat tiles --- */
+  let stats = "";
+  const tile = (k, v, cls = "") => `<div class="stat"><div class="k">${k}</div><div class="v ${cls}">${v}</div></div>`;
+  stats += tile("Before", fmtCost(cB) + " " + unit);
+  stats += tile("After", fmtCost(cA) + " " + unit, "g");
+  stats += tile("Improvement", (improvePct >= 0 ? "" : "+") + improvePct.toFixed(1) + "%", improvePct > 0 ? "g" : "");
+  stats += tile("Iterations", String(S.aco.iteration));
+
+  if (S.mode === "errand") {
+    stats += tile("Distance saved", (cB - cA).toFixed(2) + " km", (cB - cA) > 0 ? "g" : "");
+  } else {
+    const sB = S.model.schedule(before), sA = S.model.schedule(after);
+    const lateB = sB.filter((x) => x.late).length, lateA = sA.filter((x) => x.late).length;
+    stats += tile("Deadlines missed", `${lateB} → ${lateA}`, lateA < lateB ? "g" : lateA > lateB ? "b" : "");
+  }
+
+  /* --- order columns --- */
+  const col = (title, seq, cls) => {
+    const sched = S.mode === "focus" ? S.model.schedule(seq) : null;
+    let li = "";
+    for (let k = 0; k < seq.length; k++) {
+      const t = S.tasks[seq[k]];
+      const s = sched ? sched[k] : null;
+      const clk = S.mode === "focus"
+        ? `${fmtHM(s.start)}${t.due != null ? (s.late ? " ⚠" : " ✓") : ""}`
+        : "";
+      li += `<li class="${s && s.late ? "late" : ""}">
+        <span class="dot" style="background:${catColor(t.category)}"></span>
+        <span class="t">${esc(t.name)}</span>
+        <span class="clk">${clk}</span></li>`;
+    }
+    return `<div><h3>${title}</h3><ol class="ord ${cls}">${li}</ol></div>`;
+  };
+
+  const why = explain(before, after);
+
+  box.innerHTML = `<div class="stats">${stats}</div>
+    <div class="cmp">
+      ${col("Your order", before, "before")}
+      ${col("Colony's order", after, "after")}
+    </div>
+    <div class="why"><h3>Why this is better</h3><ul>${why}</ul></div>`;
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+/* Plain-English reasoning, derived from the actual objective terms. */
+function explain(before, after) {
+  const out = [];
+  const li = (cls, html) => out.push(`<li class="${cls}">${html}</li>`);
+
+  if (S.mode === "errand") {
+    const cB = S.model.cost(before), cA = S.model.cost(after);
+    const d = cB - cA;
+    li(d > 0.001 ? "up" : "eq",
+      d > 0.001
+        ? `Route shortened by <b>${d.toFixed(2)} km</b> (${((d / cB) * 100).toFixed(1)}% less driving).`
+        : `Your original route was already optimal — the colony could not beat it.`);
+    // find the biggest single improvement: longest hop removed
+    const D = S.model.dist;
+    const hops = (seq) => {
+      const h = [];
+      for (let k = 0; k < seq.length; k++) h.push([seq[k], seq[(k + 1) % seq.length], D[seq[k]][seq[(k + 1) % seq.length]]]);
+      return h;
+    };
+    const worstB = hops(before).sort((a, b) => b[2] - a[2])[0];
+    const worstA = hops(after).sort((a, b) => b[2] - a[2])[0];
+    if (worstB && worstA && worstB[2] > worstA[2] + 0.01)
+      li("up", `Longest single leg cut from <b>${worstB[2].toFixed(1)} km</b> (${esc(S.tasks[worstB[0]].name)} → ${esc(S.tasks[worstB[1]].name)}) to <b>${worstA[2].toFixed(1)} km</b>.`);
+    li("eq", `Tour is closed — it returns to your starting point, as a true TSP requires.`);
+    return out.join("");
+  }
+
+  /* focus mode: compare each objective term */
+  const pB = S.model.breakdown(before), pA = S.model.breakdown(after);
+  const W = S.weights;
+  const term = (key, label, unitTxt, fmt) => {
+    if (W[key] === 0) { li("eq", `<b>${label}</b> ignored — you set its weight to zero.`); return; }
+    const d = pB[key] - pA[key];
+    const rel = pB[key] > 0 ? (d / pB[key]) * 100 : 0;
+    if (Math.abs(d) < 0.01) li("eq", `<b>${label}</b> unchanged.`);
+    else if (d > 0) li("up", `<b>${label}</b> improved ${rel > 0 ? rel.toFixed(0) + "% " : ""}— ${fmt(pB[key], pA[key])}.`);
+    else li("dn", `<b>${label}</b> got slightly worse (${fmt(pB[key], pA[key])}), traded away for bigger gains elsewhere.`);
+  };
+
+  const sB = S.model.schedule(before), sA = S.model.schedule(after);
+  const lateB = sB.filter((x) => x.late), lateA = sA.filter((x) => x.late);
+
+  if (lateB.length > lateA.length) {
+    const fixed = lateB.filter((x) => !lateA.some((y) => y.idx === x.idx))
+      .map((x) => S.tasks[x.idx].name);
+    li("up", `Now hits <b>${lateB.length - lateA.length} more deadline${lateB.length - lateA.length > 1 ? "s" : ""}</b>${fixed.length ? " — rescued " + fixed.slice(0, 3).map(esc).map((s) => "<b>" + s + "</b>").join(", ") : ""}.`);
+  } else if (lateA.length > lateB.length) {
+    li("dn", `Misses <b>${lateA.length - lateB.length}</b> more deadline(s) — try raising the deadline weight.`);
+  } else if (lateA.length === 0) {
+    li("up", `<b>Every deadline met</b> in both orders.`);
+  }
+
+  term("deadline", "Deadline pressure", "h", (b, a) => `${b.toFixed(1)} → ${a.toFixed(1)} overdue-hours`);
+  term("priority", "Urgent-work-first", "", (b, a) => `${b.toFixed(1)} → ${a.toFixed(1)} inversion score`);
+  term("context", "Context switching", "", (b, a) => `${(b / 2).toFixed(0)} → ${(a / 2).toFixed(0)} switches`);
+  term("energy", "Cognitive-load timing", "", (b, a) => `${b.toFixed(1)} → ${a.toFixed(1)} mismatch`);
+
+  // concrete example: biggest mover
+  let mover = null, bestDelta = 0;
+  const posB = {}, posA = {};
+  before.forEach((t, i) => (posB[t] = i));
+  after.forEach((t, i) => (posA[t] = i));
+  for (const t of before) {
+    const d = posB[t] - posA[t];
+    if (Math.abs(d) > Math.abs(bestDelta)) { bestDelta = d; mover = t; }
+  }
+  if (mover != null && Math.abs(bestDelta) >= 2) {
+    const nm = esc(S.tasks[mover].name);
+    li("up", bestDelta > 0
+      ? `<b>${nm}</b> moved <b>${bestDelta} slots earlier</b> (now ${fmtHM(sA[posA[mover]].start)}).`
+      : `<b>${nm}</b> pushed <b>${-bestDelta} slots later</b> to make room for higher-priority work.`);
+  }
+  if (S.deps.length)
+    li("eq", `All <b>${S.deps.length}</b> dependency constraint${S.deps.length > 1 ? "s" : ""} respected.`);
+
+  return out.join("");
+}
+
+/* ============================================================
+   SIDEBAR RENDERING
+   ============================================================ */
+function renderTasks() {
+  const box = $("taskList");
+  $("taskCount").textContent = S.tasks.length + (S.tasks.length === 1 ? " task" : " tasks");
+  if (!S.tasks.length) {
+    box.innerHTML = '<div class="empty">No tasks yet.</div>';
+  } else {
+    box.innerHTML = S.tasks.map((t, i) => {
+      const meta = S.mode === "errand"
+        ? `${t.duration}m`
+        : `p${t.priority} · L${t.load} · ${t.duration}m${t.due != null ? " · due " + fmtHM(t.due) : ""}`;
+      return `<div class="task">
+        <span class="dot" style="background:${catColor(t.category)}"></span>
+        <span class="nm">${esc(t.name)}</span>
+        <span class="meta">${meta}</span>
+        <button class="x" data-del="${i}" aria-label="Remove ${esc(t.name)}">✕</button>
+      </div>`;
+    }).join("");
+  }
+  renderDepUI();
+}
+
+function renderDepUI() {
+  const errand = S.mode === "errand";
+  $("depCard").classList.toggle("off", errand);
+  $("depNote").textContent = errand ? "Focus Mode only" : (S.deps.length + " active");
+
+  const opts = S.tasks.map((t, i) => `<option value="${i}">${esc(t.name)}</option>`).join("");
+  $("depA").innerHTML = opts;
+  $("depB").innerHTML = opts;
+  if (S.tasks.length > 1) $("depB").selectedIndex = 1;
+
+  $("depList").innerHTML = S.deps.map(([a, b], i) =>
+    `<span class="dep">${esc(S.tasks[a]?.name ?? "?")} → ${esc(S.tasks[b]?.name ?? "?")}
+      <button data-undep="${i}" aria-label="Remove constraint">✕</button></span>`).join("");
+}
+
+function setMode(m) {
+  if (S.mode === m) return;
+  S.mode = m;
+  $("mErrand").setAttribute("aria-pressed", String(m === "errand"));
+  $("mFocus").setAttribute("aria-pressed", String(m === "focus"));
+  S.tasks = m === "errand" ? sampleErrand() : sampleFocus();
+  S.deps = [];
+  S.original = null;
+  $("weightCard").classList.toggle("off", m === "errand");
+  $("hUnit").textContent = m === "errand" ? "km (haversine)" : "penalty points";
+  $("vizTitle").textContent = m === "errand" ? "Route" : "Colony";
+  $("convNote").textContent = m === "errand" ? "best tour length per iteration" : "best penalty per iteration";
+  $("modeBlurb").innerHTML = m === "errand"
+    ? "<b>Errand Mode</b> is a literal Traveling Salesman Problem: each task is a real place, distance is haversine kilometres, and the tour returns home. Dependencies are disabled here because a closed tour has no start — \"before\" has no meaning in a cycle."
+    : "<b>Focus Mode</b> applies the same colony to task <i>sequencing</i>. Cost is a weighted sum of deadline misses, priority inversion, context switching and cognitive-load timing — so the optimum is meaningful rather than an artifact of random coordinates.";
+  renderTasks();
+  resetEngine(false);
+}
+
+/* ============================================================
+   EVENTS
+   ============================================================ */
+$("mErrand").onclick = () => setMode("errand");
+$("mFocus").onclick = () => setMode("focus");
+
+for (const [id, v] of [["vAnts", "ants"], ["vPhero", "phero"], ["vBoth", "both"]]) {
+  $(id).onclick = () => {
+    S.view = v;
+    for (const [i2, v2] of [["vAnts", "ants"], ["vPhero", "phero"], ["vBoth", "both"]])
+      $(i2).setAttribute("aria-pressed", String(v2 === v));
+    drawStage();
+  };
+}
+
+$("bRun").onclick = () => {
+  if (S.running) { stopRun(); return; }
+  if (!S.tasks.length) return;
+  if (S.aco.iteration >= S.params.iters) resetEngine(true);
+  S.running = true;
+  $("bRun").textContent = "⏸ Pause";
+  S.raf = requestAnimationFrame(tick);
+};
+$("bStep").onclick = () => {
+  stopRun();
+  if (!S.tasks.length) return;
+  S.aco.step(); seedAntAnim(); updateHud(); drawStage(); drawChart(); renderResults();
+};
+$("bReset").onclick = () => resetEngine(true);
+$("bShuffle").onclick = () => {
+  stopRun();
+  // shuffle the *entered* order, respecting deps so "before" stays a valid baseline
+  const r = mulberry32((Math.random() * 1e9) | 0);
+  const idx = S.tasks.map((_, i) => i);
+  for (let i = idx.length - 1; i > 0; i--) {
+    const j = Math.floor(r() * (i + 1));
+    [idx[i], idx[j]] = [idx[j], idx[i]];
+  }
+  S.tasks = idx.map((i) => S.tasks[i]);
+  const remap = {}; idx.forEach((old, nw) => (remap[old] = nw));
+  S.deps = S.deps.map(([a, b]) => [remap[a], remap[b]]);
+  S.original = null;
+  renderTasks(); resetEngine(false);
+};
+$("bSample").onclick = () => {
+  stopRun();
+  S.tasks = S.mode === "errand" ? sampleErrand() : sampleFocus();
+  S.deps = []; S.original = null;
+  renderTasks(); resetEngine(false);
+};
+
+function addTask() {
+  const inp = $("newTask");
+  const name = inp.value.trim();
+  if (!name) return;
+  if (S.mode === "errand") {
+    // place near the existing cluster so distances stay sane
+    const lat = S.tasks.length ? S.tasks[0].lat : 12.96;
+    const lon = S.tasks.length ? S.tasks[0].lon : 77.60;
+    S.tasks.push({
+      name, category: "errands",
+      lat: lat + (Math.random() - 0.5) * 0.08,
+      lon: lon + (Math.random() - 0.5) * 0.08,
+      duration: 20, priority: 5, load: 3, due: null,
+    });
+  } else {
+    S.tasks.push({
+      name, category: "work", duration: 30,
+      priority: 5 + Math.floor(Math.random() * 4),
+      load: 3 + Math.floor(Math.random() * 5), due: null,
+    });
+  }
+  inp.value = "";
+  S.original = null;
+  renderTasks(); resetEngine(false);
+}
+$("bAdd").onclick = addTask;
+$("newTask").addEventListener("keydown", (e) => { if (e.key === "Enter") addTask(); });
+
+$("taskList").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-del]");
+  if (!b) return;
+  const i = +b.dataset.del;
+  S.tasks.splice(i, 1);
+  S.deps = S.deps
+    .filter(([a, c]) => a !== i && c !== i)
+    .map(([a, c]) => [a > i ? a - 1 : a, c > i ? c - 1 : c]);
+  S.original = null;
+  renderTasks(); resetEngine(false);
+});
+
+$("bDep").onclick = () => {
+  const a = +$("depA").value, b = +$("depB").value;
+  const warn = $("depWarn");
+  warn.innerHTML = "";
+  if (isNaN(a) || isNaN(b)) return;
+  if (a === b) { warn.innerHTML = '<div class="warn">A task cannot precede itself.</div>'; return; }
+  if (S.deps.some(([x, y]) => x === a && y === b)) {
+    warn.innerHTML = '<div class="warn">That constraint already exists.</div>'; return;
+  }
+  const test = S.deps.concat([[a, b]]);
+  if (hasCycle(S.tasks.length, test)) {
+    warn.innerHTML = '<div class="warn">That would create a circular dependency.</div>'; return;
+  }
+  S.deps = test;
+  renderDepUI(); resetEngine(true);
+};
+$("depList").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-undep]");
+  if (!b) return;
+  S.deps.splice(+b.dataset.undep, 1);
+  $("depWarn").innerHTML = "";
+  renderDepUI(); resetEngine(true);
+});
+
+/* sliders */
+function bindSlider(id, labId, key, fmt, isWeight) {
+  const el = $(id);
+  // Fall back to the current state value if the control has no parsable value
+  // yet (older browsers, or a value attribute the UA has not applied).
+  const fallback = () => (isWeight ? S.weights[key] : S.params[key]);
+  const upd = (live) => {
+    let v = parseFloat(el.value);
+    if (!isFinite(v)) {
+      v = fallback();
+      el.value = String(v);
+    }
+    $(labId).textContent = fmt(v);
+    if (isWeight) S.weights[key] = v; else S.params[key] = v;
+    if (key === "iters") $("hIters").textContent = String(v);
+    if (!live) {
+      // structural change -> rebuild
+      if (["nAnts", "alpha", "beta", "rho", "q0", "ls"].includes(key) || isWeight) resetEngine(true);
+    }
+  };
+  el.addEventListener("input", () => upd(true));
+  el.addEventListener("change", () => upd(false));
+  upd(true);
+}
+bindSlider("sAnts", "lAnts", "nAnts", (v) => String(v));
+bindSlider("sIters", "lIters", "iters", (v) => String(v));
+bindSlider("sAlpha", "lAlpha", "alpha", (v) => v.toFixed(1));
+bindSlider("sBeta", "lBeta", "beta", (v) => v.toFixed(1));
+bindSlider("sRho", "lRho", "rho", (v) => v.toFixed(2));
+bindSlider("sQ0", "lQ0", "q0", (v) => v.toFixed(2));
+bindSlider("sSpeed", "lSpeed", "speed", (v) => ["slow", "1×", "fast", "turbo"][v]);
+bindSlider("sLS", "lLS", "ls", (v) => (v ? "on" : "off"));
+bindSlider("sWd", "lWd", "deadline", (v) => v.toFixed(1), true);
+bindSlider("sWp", "lWp", "priority", (v) => v.toFixed(1), true);
+bindSlider("sWc", "lWc", "context", (v) => v.toFixed(1), true);
+bindSlider("sWe", "lWe", "energy", (v) => v.toFixed(1), true);
+
+/* keep ants animating even while paused, so the canvas feels alive */
+(function idle() {
+  if (!S.running && (S.view === "ants" || S.view === "both") && S.antAnim.length) drawStage();
+  requestAnimationFrame(idle);
+})();
+
+window.addEventListener("resize", () => { computeLayout(); drawStage(); drawChart(); });
+
+/* ---------------- boot ---------------- */
+$("hUnit").textContent = "penalty points";
+$("modeBlurb").innerHTML = "<b>Focus Mode</b> applies the same colony to task <i>sequencing</i>. Cost is a weighted sum of deadline misses, priority inversion, context switching and cognitive-load timing — so the optimum is meaningful rather than an artifact of random coordinates.";
+renderTasks();
+resetEngine(false);
+</script>
+</body>
+</html>
