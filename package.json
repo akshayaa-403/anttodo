@@ -1,0 +1,27 @@
+{
+  "name": "anttodo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Ant Colony Optimization visualizer that finds the best order for your tasks. Single self-contained index.html, no build step.",
+  "keywords": [
+    "ant-colony-optimization",
+    "aco",
+    "tsp",
+    "scheduling",
+    "visualization",
+    "canvas"
+  ],
+  "license": "MIT",
+  "homepage": "https://akshayaa-403.github.io/anttodo/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/akshayaa-403/anttodo.git"
+  },
+  "scripts": {
+    "test": "node test/run.js",
+    "start": "python -m http.server 8000"
+  },
+  "engines": {
+    "node": ">=16"
+  }
+}

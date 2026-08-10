@@ -93,7 +93,9 @@ vm.createContext(sandbox);
 console.log('\n=== boot the full page script ===');
 let bootErr = null;
 try {
-  vm.runInContext(script + '\n;globalThis.__S = S;', sandbox, { timeout: 20000 });
+  vm.runInContext(
+    script + '\n;globalThis.__S = S; globalThis.__renderResults = renderResults;',
+    sandbox, { timeout: 20000 });
   ok('script boots with no exception', true);
 } catch (e) {
   bootErr = e;
@@ -141,6 +143,33 @@ ok('clock times rendered (focus mode)', /\d\d:\d\d/.test(res));
 ok('no literal "undefined" leaked into HTML', !res.includes('undefined'),
    res.includes('undefined') ? res.slice(res.indexOf('undefined')-90, res.indexOf('undefined')+40) : '');
 ok('no NaN leaked into HTML', !/\bNaN\b/.test(res));
+ok('improvement has no "+-" sign collision', !res.includes('+-'),
+   res.includes('+-') ? res.slice(res.indexOf('+-') - 60, res.indexOf('+-') + 20) : '');
+ok('improvement reads better/worse, not a bare signed number',
+   /\d\.\d% (better|worse)/.test(res), (res.match(/Improvement[\s\S]{0,120}/)||[''])[0]);
+
+/* Force a WORSE outcome to exercise the negative branch: pin the "original"
+   order to the colony's best, then make the engine's best a costlier order. */
+{
+  const savedOrig = S.original, savedBest = S.aco.best;
+  S.original = S.aco.best.slice();                 // before == optimum
+  S.aco.best = S.aco.best.slice().reverse();       // after  == likely worse
+  let worseHtml = '';
+  try {
+    sandbox.__renderResults ? sandbox.__renderResults() : $('bStep').onclick();
+    worseHtml = $('results').innerHTML;
+  } catch (e) { worseHtml = 'THREW ' + e.message; }
+  const costB = S.model.cost(S.original), costA = S.model.cost(S.aco.best);
+  if (costA > costB) {
+    ok('negative improvement renders as "worse" with no "+-"',
+       !worseHtml.includes('+-') && /% worse/.test(worseHtml),
+       (worseHtml.match(/Improvement[\s\S]{0,120}/)||[''])[0]);
+  } else {
+    ok('negative improvement case (reversal was not worse; skipped)', true);
+  }
+  S.original = savedOrig; S.aco.best = savedBest;
+}
+
 console.log('        reasoning bullets:');
 for (const m of res.matchAll(/<li class="(up|dn|eq)">([\s\S]*?)<\/li>/g))
   console.log('          [' + m[1] + '] ' + m[2].replace(/<[^>]+>/g, '').trim().slice(0, 96));

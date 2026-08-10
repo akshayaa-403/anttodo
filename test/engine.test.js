@@ -14,9 +14,10 @@ let src = m[1];
 
 // Stub out the DOM so the engine portion evaluates. We cut everything from the
 // APP STATE marker onward, keeping only pure logic.
-const cut = src.indexOf('/* ============================================================\n   APP STATE');
-if (cut < 0) { console.error('APP STATE marker not found'); process.exit(1); }
-src = src.slice(0, cut);
+// Match on the marker alone, tolerating CRLF/LF and banner-width changes.
+const cutMatch = /\/\*\s*=+\s*APP STATE/.exec(src);
+if (!cutMatch) { console.error('APP STATE marker not found'); process.exit(1); }
+src = src.slice(0, cutMatch.index);
 
 src += `
 module.exports = { ACO, makeErrandModel, makeFocusModel, topoOrder, hasCycle,

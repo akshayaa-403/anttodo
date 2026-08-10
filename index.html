@@ -293,42 +293,42 @@
       <div class="bd">
         <div class="ctrl">
           <div class="lab"><span>Ants per iteration</span><code id="lAnts">20</code></div>
-          <input type="range" id="sAnts" min="4" max="120" step="1" value="20">
+          <input type="range" id="sAnts" aria-label="Ants per iteration" min="4" max="120" step="1" value="20">
           <div class="hint">More ants explore more orderings each round.</div>
         </div>
         <div class="ctrl">
           <div class="lab"><span>Iterations</span><code id="lIters">100</code></div>
-          <input type="range" id="sIters" min="10" max="400" step="5" value="100">
+          <input type="range" id="sIters" aria-label="Iterations" min="10" max="400" step="5" value="100">
           <div class="hint">How long the colony gets to converge.</div>
         </div>
         <div class="ctrl">
           <div class="lab"><span>α · pheromone weight</span><code id="lAlpha">1.0</code></div>
-          <input type="range" id="sAlpha" min="0" max="5" step="0.1" value="1">
+          <input type="range" id="sAlpha" aria-label="Alpha, pheromone weight" min="0" max="5" step="0.1" value="1">
           <div class="hint">How much ants trust trails left by others.</div>
         </div>
         <div class="ctrl">
           <div class="lab"><span>β · heuristic weight</span><code id="lBeta">3.0</code></div>
-          <input type="range" id="sBeta" min="0" max="8" step="0.1" value="3">
+          <input type="range" id="sBeta" aria-label="Beta, heuristic weight" min="0" max="8" step="0.1" value="3">
           <div class="hint">How much ants favour the locally cheapest next task.</div>
         </div>
         <div class="ctrl">
           <div class="lab"><span>ρ · evaporation</span><code id="lRho">0.10</code></div>
-          <input type="range" id="sRho" min="0.01" max="0.9" step="0.01" value="0.1">
+          <input type="range" id="sRho" aria-label="Rho, evaporation rate" min="0.01" max="0.9" step="0.01" value="0.1">
           <div class="hint">How fast old trails fade. High ρ = forgets faster.</div>
         </div>
         <div class="ctrl">
           <div class="lab"><span>q₀ · greediness</span><code id="lQ0">0.10</code></div>
-          <input type="range" id="sQ0" min="0" max="1" step="0.01" value="0.1">
+          <input type="range" id="sQ0" aria-label="q-zero, greediness" min="0" max="1" step="0.01" value="0.1">
           <div class="hint">Chance an ant takes the best-looking edge outright.</div>
         </div>
         <div class="ctrl">
           <div class="lab"><span>Speed</span><code id="lSpeed">fast</code></div>
-          <input type="range" id="sSpeed" min="0" max="3" step="1" value="2">
+          <input type="range" id="sSpeed" aria-label="Animation speed" min="0" max="3" step="1" value="2">
           <div class="hint">Iterations drawn per animation frame.</div>
         </div>
         <div class="ctrl">
           <div class="lab"><span>2-opt local search</span><code id="lLS">on</code></div>
-          <input type="range" id="sLS" min="0" max="1" step="1" value="1">
+          <input type="range" id="sLS" aria-label="2-opt local search, on or off" min="0" max="1" step="1" value="1">
           <div class="hint">Polishes each ant's route. Much better results, a bit slower.</div>
         </div>
       </div>
@@ -339,19 +339,19 @@
       <div class="bd">
         <div class="ctrl">
           <div class="lab"><span>Hitting deadlines</span><code id="lWd">1.0</code></div>
-          <input type="range" id="sWd" min="0" max="3" step="0.1" value="1">
+          <input type="range" id="sWd" aria-label="Objective weight: hitting deadlines" min="0" max="3" step="0.1" value="1">
         </div>
         <div class="ctrl">
           <div class="lab"><span>Urgent work first</span><code id="lWp">1.0</code></div>
-          <input type="range" id="sWp" min="0" max="3" step="0.1" value="1">
+          <input type="range" id="sWp" aria-label="Objective weight: urgent work first" min="0" max="3" step="0.1" value="1">
         </div>
         <div class="ctrl">
           <div class="lab"><span>Avoiding context switches</span><code id="lWc">1.0</code></div>
-          <input type="range" id="sWc" min="0" max="3" step="0.1" value="1">
+          <input type="range" id="sWc" aria-label="Objective weight: avoiding context switches" min="0" max="3" step="0.1" value="1">
         </div>
         <div class="ctrl">
           <div class="lab"><span>Hard work while fresh</span><code id="lWe">1.0</code></div>
-          <input type="range" id="sWe" min="0" max="3" step="0.1" value="1">
+          <input type="range" id="sWe" aria-label="Objective weight: hard work while fresh" min="0" max="3" step="0.1" value="1">
         </div>
         <div class="note" style="margin-top:4px">These are the objective's weights. Set one to 0 to ignore it entirely.</div>
       </div>
@@ -765,6 +765,9 @@ function stopRun() {
   if (S.raf) cancelAnimationFrame(S.raf);
   S.raf = null;
   $("bRun").textContent = "▶ Run colony";
+  // A run can end on its own (iteration cap) with no user interaction, so
+  // restart the idle crawl explicitly rather than waiting for an event.
+  if (typeof wakeIdle === "function") wakeIdle();
 }
 function tick() {
   if (!S.running) return;
@@ -1013,7 +1016,13 @@ function renderResults() {
   const tile = (k, v, cls = "") => `<div class="stat"><div class="k">${k}</div><div class="v ${cls}">${v}</div></div>`;
   stats += tile("Before", fmtCost(cB) + " " + unit);
   stats += tile("After", fmtCost(cA) + " " + unit, "g");
-  stats += tile("Improvement", (improvePct >= 0 ? "" : "+") + improvePct.toFixed(1) + "%", improvePct > 0 ? "g" : "");
+  // Negative improvement means the colony's order costs more than the entered
+  // one (possible if weights changed mid-run). Show it as "+N% worse" rather
+  // than letting toFixed's own minus sign collide with a prepended "+".
+  const impTxt = improvePct >= 0
+    ? improvePct.toFixed(1) + "% better"
+    : Math.abs(improvePct).toFixed(1) + "% worse";
+  stats += tile("Improvement", impTxt, improvePct > 0 ? "g" : improvePct < 0 ? "b" : "");
   stats += tile("Iterations", String(S.aco.iteration));
 
   if (S.mode === "errand") {
@@ -1320,7 +1329,11 @@ function bindSlider(id, labId, key, fmt, isWeight) {
       v = fallback();
       el.value = String(v);
     }
-    $(labId).textContent = fmt(v);
+    const shown = fmt(v);
+    $(labId).textContent = shown;
+    // Announce the formatted value, so screen readers say "fast" / "on"
+    // rather than the raw slider number.
+    el.setAttribute("aria-valuetext", shown);
     if (isWeight) S.weights[key] = v; else S.params[key] = v;
     if (key === "iters") $("hIters").textContent = String(v);
     if (!live) {
@@ -1345,11 +1358,33 @@ bindSlider("sWp", "lWp", "priority", (v) => v.toFixed(1), true);
 bindSlider("sWc", "lWc", "context", (v) => v.toFixed(1), true);
 bindSlider("sWe", "lWe", "energy", (v) => v.toFixed(1), true);
 
-/* keep ants animating even while paused, so the canvas feels alive */
-(function idle() {
-  if (!S.running && (S.view === "ants" || S.view === "both") && S.antAnim.length) drawStage();
-  requestAnimationFrame(idle);
-})();
+/* Keep ants crawling while paused so the canvas feels alive — but don't burn
+   CPU forever. Capped at ~24fps, suspended while the tab is hidden, and it
+   stops entirely after a period of no interaction (a static canvas at that
+   point looks identical, so nothing is lost visually). */
+const IDLE_FPS = 24, IDLE_GIVE_UP_MS = 90000;
+let idleLastDraw = 0, lastInteraction = performance.now(), idleHandle = null;
+
+function idleLoop(now) {
+  idleHandle = null;
+  const animating = !S.running
+    && (S.view === "ants" || S.view === "both")
+    && S.antAnim.length > 0;
+  const stale = now - lastInteraction > IDLE_GIVE_UP_MS;
+  if (animating && !stale && !document.hidden) {
+    if (now - idleLastDraw >= 1000 / IDLE_FPS) { idleLastDraw = now; drawStage(); }
+    idleHandle = requestAnimationFrame(idleLoop);
+  }
+  // otherwise: stop scheduling. wakeIdle() restarts us on the next interaction.
+}
+function wakeIdle() {
+  lastInteraction = performance.now();
+  if (idleHandle == null && !S.running) idleHandle = requestAnimationFrame(idleLoop);
+}
+for (const evt of ["pointerdown", "pointermove", "keydown", "wheel", "focusin"])
+  window.addEventListener(evt, wakeIdle, { passive: true });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) wakeIdle(); });
+wakeIdle();
 
 window.addEventListener("resize", () => { computeLayout(); drawStage(); drawChart(); });
 

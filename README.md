@@ -16,15 +16,11 @@ An interactive visualizer that applies **Ant Colony Optimization** to task order
 
 The app ships with two problem formulations that share the same ACO engine. This distinction is the point of the project, so it's worth being precise about it.
 
-<<<<<<< HEAD
 ### 📍 Errand Mode — a literal Traveling Salesman Problem
 
 Tasks are **real places** with latitude and longitude. Distance is genuine haversine kilometres, the heuristic is `η = 1/km`, and the tour is **closed** (it returns home). This is textbook TSP, and the answer is objectively verifiable — a shorter route really is shorter.
 
 ### 🧠 Focus Mode — task sequencing
-=======
-### Local Setup
->>>>>>> 8997def4ecb66ec8410dfc6524596450f8b05fc6
 
 Here the colony optimizes the **order** of a workday against a cost function built from things that actually matter:
 
@@ -62,11 +58,31 @@ Focus Mode avoids this by optimizing against a cost function with real semantics
 
 ## Running locally
 
+No build process, no package manager, no dependencies.
+
 ```bash
 git clone https://github.com/akshayaa-403/anttodo.git
 cd anttodo
-python -m http.server 8000# open index.html in your browser — that's it
 ```
+
+Then just open `index.html` in your browser — that's it.
+
+Or serve it over HTTP:
+
+```bash
+python -m http.server 8000
+# visit http://localhost:8000
+```
+
+### Running the tests
+
+```bash
+node test/run.js     # or: npm test
+```
+
+### Deploying
+
+Push to `main` and enable **Settings → Pages → Deploy from a branch → `main` / `/ (root)`**. Because `index.html` sits at the repository root and makes no external requests, it works on GitHub Pages as-is.
 
 ---
 
@@ -103,11 +119,13 @@ The random number generator is a seeded `mulberry32`, so a given configuration r
 
 ## Verification
 
-The engine is covered by **101 assertions** across two suites, run headlessly in Node against the code **extracted from `index.html` itself** — so the tests exercise what actually ships, not a copy that might drift.
+The engine is covered by **104 assertions** across two suites, run headlessly in Node against the code **extracted from `index.html` itself** — so the tests exercise what actually ships, not a copy that might drift.
 
 ```bash
-node test/run.js     # no dependencies needed
+npm test             # or: node test/run.js — no dependencies needed
 ```
+
+CI runs these on every push and PR, plus a lint step that fails the build if merge-conflict markers reach a tracked file.
 
 `test/engine.test.js` covers the algorithm; `test/ui.test.js` boots the entire page script against a stub DOM and drives the real event handlers, so wiring bugs surface too. They check, among other things:
 
@@ -140,8 +158,4 @@ Most importantly, it demonstrates the practice of **choosing an objective functi
 
 ## License
 
-<<<<<<< HEAD
 MIT — see [LICENSE](LICENSE).
-=======
-This project is licensed under the **MIT License** — see [LICENSE](LICENSE) for details.
->>>>>>> 8997def4ecb66ec8410dfc6524596450f8b05fc6
