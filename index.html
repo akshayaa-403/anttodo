@@ -415,14 +415,10 @@ function mulberry32(seed) {
   };
 }
 const CATS = {
-  work:     { label: "work",     color: "#4ea1ff" },
-  errands:  { label: "errands",  color: "#ffb245" },
-  home:     { label: "home",     color: "#3ddc97" },
-  health:   { label: "health",   color: "#ff6b6b" },
-  social:   { label: "social",   color: "#c792ea" },
-  admin:    { label: "admin",    color: "#7fdbca" },
+  work: "#4ea1ff", errands: "#ffb245", home: "#3ddc97",
+  health: "#ff6b6b", social: "#c792ea", admin: "#7fdbca",
 };
-const catColor = (c) => (CATS[c] || { color: "#8b95a4" }).color;
+const catColor = (c) => CATS[c] || "#8b95a4";
 
 /* ---------------- sample data ---------------- */
 function sampleFocus() {
@@ -502,7 +498,6 @@ function makeErrandModel(tasks) {
       for (let i = 0; i < seq.length - 1; i++) t += D[seq[i]][seq[i + 1]];
       return t + D[seq[seq.length - 1]][seq[0]];
     },
-    breakdown(seq) { return { travel: this.cost(seq) }; },
   };
 }
 function makeFocusModel(tasks, weights, dayStart = 9 * 60, dayLen = 8 * 60) {
@@ -767,7 +762,7 @@ function stopRun() {
   $("bRun").textContent = "▶ Run colony";
   // A run can end on its own (iteration cap) with no user interaction, so
   // restart the idle crawl explicitly rather than waiting for an event.
-  if (typeof wakeIdle === "function") wakeIdle();
+  wakeIdle();
 }
 function tick() {
   if (!S.running) return;
